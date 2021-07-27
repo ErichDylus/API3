@@ -1,4 +1,4 @@
-## Voting Power Delegate Disclosure
+## Voting Power Delegation Disclosure
 
 *Last updated: July 27, 2021*
 
