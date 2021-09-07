@@ -9,6 +9,17 @@
 API3 DAO-related materials, writings, forms, etc.
 
 Unless otherwise specified, my [autonomous attorney disclosure](https://github.com/ErichDylus/Open-Source-Law/blob/main/Disclosure.md) applies to everything in this repository.
+
+<br>
+<br>
+  
+**Articles**
+  
+ - [Redefining Trust: Smart Escrow Contracts](https://medium.com/api3/redefining-trust-smart-escrow-contracts-975a8ee26703)
+  
+ - [Legal Contract Formation in Smart Contracts](https://lexdao.substack.com/p/legal-contract-formation-in-smart)
+  
+ - [Redefining Trust: Aviation Finance](https://medium.com/api3/broken-processes-how-to-fix-them-aviation-finance-3ceed6a2089f)
   
 <br>
 <br>
