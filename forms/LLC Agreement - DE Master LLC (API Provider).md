@@ -20,7 +20,7 @@ D.	Each Series formed under the Company will functionally operate as a separate 
 
 E.	The Company is hereby formed as the "master" limited liability company (the "Master LLC") and shall not maintain any ownership interest in any Series or assets held on behalf of any Series.
 
-F.	[Member], as the initial Member of the Master LLC, desires to enter into a written limited liability company agreement as to the affairs of the Master LLC.
+F.	[MEMBER], as the initial Member of the Master LLC, desires to enter into a written limited liability company agreement as to the affairs of the Master LLC.
 NOW, THEREFORE, in consideration of the agreements and obligations set forth herein and for other good and valuable consideration, the receipt and sufficiency of which are hereby acknowledged, Member hereby agrees as follows:
 
 ARTICLE I. ORGANIZATIONAL MATTERS
