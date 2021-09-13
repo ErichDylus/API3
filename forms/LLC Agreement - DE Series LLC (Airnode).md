@@ -26,7 +26,7 @@ Definitions. When used in this Agreement, capitalized terms have the meanings as
 
 "Code" means the Internal Revenue Code of 1986, as amended.
 
-"Company Blockchain Address" means that certain public key address 0x_________ on the public mainnet digital blockchain ledger commonly known as “Ethereum” (for avoidance of doubt, inclusive of any rollup, shard, layer two, or other mechanism which natively settles on Ethereum) the uniquely associated private key to such public key which is solely controlled by the Company.
+"Company Blockchain Address" means that certain public key address 0x_________ on the public mainnet digital blockchain ledger commonly known as “Ethereum” (for avoidance of doubt, inclusive of any rollup, shard, layer two, or other mechanism which natively settles on Ethereum).
 
 "Company ProviderID" means [________].
 
@@ -50,7 +50,7 @@ Definitions. When used in this Agreement, capitalized terms have the meanings as
 
 "Liquidating Trustee" means the Manager (or its authorized designee) or, if there is none, a Person selected by the Consent of the Members to act as a liquidating trustee of the Company.  
 
-"Manager" means the holder of the Ethereum wallet address described in the signature page, who will be a "manager" of the Company within the meaning of Section 18-101(10) of the Act.
+"Manager" means the controller of the private key uniquely associated with the Company Blockchain Address, who will be a "manager" of the Company within the meaning of Section 18-101(10) of the Act.
 
 "Master LLC" means [MASTER LLC NAME] LLC, a State of Delaware limited liability company.
 
@@ -73,7 +73,7 @@ Name. The name of the Company is set forth on the cover page of this Agreement. 
 
 Establishment of Series.   Pursuant to Section 18-215(b) of the Act and the Limited Liability Company Agreement of the Master LLC (the "Master LLC Agreement"), the Master LLC is authorized to establish separate members and limited liability company interests with separate and distinct rights, powers, duties, obligations, operations, businesses and objectives (each a "Series"). Notice is hereby given that the Company is hereby established as a Series under the Master LLC Agreement. The Series created hereby, and the rights and obligations of the Members of the Series will be governed by this Agreement. In the event of any inconsistency between this Agreement and the Master LLC Agreement, this Agreement will control. The debts, liabilities, obligations and expenses incurred, with respect to the Company will be enforceable against the assets of the Company only and not against the assets of the Master LLC generally or any other Series of the Master, and, unless otherwise provided in this Agreement, none of the debts, liabilities, obligations and expenses incurred, contracted for or otherwise existing with respect to the Master LLC generally or any other Series of the Master LLC will be enforceable against the assets of the Company. A member participating in one Series will have no rights or interest with respect to any other Series, other than through that Member's interest in that Series independently acquired by that Member. This Agreement and all provisions herein will be interpreted in a manner to give full effect to the separateness of each Series. The Manager shall take reasonable steps as are necessary to implement the provisions of this Section. Without limitation on the preceding sentence, the Manager shall maintain separate and distinct records for each Series, shall separately hold and account for the assets of each Series, and shall otherwise comply with the requirements of Section 18-215 of the Act. The dissolution and termination of the Company will not, in and of itself, cause or result in the dissolution or termination of the Master LLC or any other Series.
 
-ProviderId and Address.     The Company solely owns, controls, and holds valid title to, and shall continue to own, control, and hold valid title to all rights and assets and exclusively carries all obligations and liabilities by or through the Company Blockchain Address and in connection with the Company ProviderID.
+ProviderId and Address.     The Company solely owns and holds valid title to, and shall continue to own and hold valid title to, all rights and assets and exclusively carries all obligations and liabilities by or through the Company Blockchain Address and in connection with the Company ProviderID.
 
 Specific Disclaimer. The Company, its Members and Manager agree to the disclaimers set forth under Schedule A hereto and shall at all times hold the Master LLC harmless of any losses or claims relating to the content of Schedule A.
 Term. The term of the Company commenced on the Effective Date and will continue in full force and effect until terminated pursuant to Article X.
