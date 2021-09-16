@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // FOR DEMONSTRATION ONLY, unaudited, not recommended to be used for any purpose, carries absolutely no warranty of any kind
-// @dev sign an API3 Token Delegation and Voting Policy, with reference to their own Delegation Disclosure
+// @dev ETHsign an API3 Token Delegation and Voting Policy, with reference to their own Delegation Disclosure
 // only if address has staked API3 in API3 governance contract
 
 pragma solidity ^0.8.6;
@@ -8,7 +8,7 @@ pragma solidity ^0.8.6;
 // Delegator deploys contract with link to disclosure and signs their Token Delegation and Voting Policy by EthSign
 
 interface VoteDelegateDisclosure {
-    function sign(string calldata details) external; 
+    function sign(string calldata details) external; // interface to API3 Delegation and Voting Policy version stamped on-chain
 }
 
 interface API3Pool {
@@ -23,20 +23,21 @@ contract SignDelegationPolicy {
     
     event DelegateDisclosure(address indexed delegate, string signature, string disclosureLink);
     
-    // deployer sets address of Token Delegation and Voting Policy (https://github.com/LeXpunK-Army/Token-Delegation-And-Voting-Policy)
+    //@param _policyContract: address of API3 Token Delegation and Voting Policy indicated on-chain
     constructor(address _policyContract) { 
         ipolicyContract = VoteDelegateDisclosure(_policyContract);
         iAPI3Pool = API3Pool(API3governance);
     }
     
-    
-    function signPolicy(string memory _disclosureLink, string calldata _signature) external {
+    //@param _disclosureLink: msg.sender submits link to their own vote delegation disclosure, which may be IPFS or merely Github (indicated version at time of signature)
+    //@param _signature: msg.sender signs (i.e. /s/ [NAME]), indicating their acknowledgment of and agreement to the API3 policy and memorializing their own disclosure
+    function signPolicy(string calldata _disclosureLink, string calldata _signature) external {
         require(iAPI3Pool.userSharesAt(msg.sender, block.number) > 0, "Signatory isn't staked in the API3 DAO governance contract.");
         ipolicyContract.sign(_signature);
         emit DelegateDisclosure(msg.sender, _signature, _disclosureLink);
     }
     
-    //check msg.sender has staked in API3 governance
+    //for msg.sender to check their current voting power in API3 governance
     function checkStake() external view returns (uint256) {
         return iAPI3Pool.userSharesAt(msg.sender, block.number);
     }
