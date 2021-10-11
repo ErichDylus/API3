@@ -12,7 +12,7 @@ interface VoteDelegateDisclosure {
 }
 
 interface API3Pool {
-    function userSharesAt(address userAddress, uint256 _block) external view returns (uint256);
+    function userSharesAt(address userAddress, uint256 block) external view returns (uint256); // interface to check signer's voting power in API3 governance pool contract
 }
 
 contract SignDelegationPolicy {
@@ -23,7 +23,7 @@ contract SignDelegationPolicy {
     
     event DelegateDisclosure(address indexed delegate, string signature, string disclosureLink);
     
-    //@param _policyContract: address of API3 Token Delegation and Voting Policy indicated on-chain
+    //@param _policyContract: address of API3 Token Delegation and Voting Policy indicated on-chain, to be confirmed by API3 DAO vote
     constructor(address _policyContract) { 
         ipolicyContract = VoteDelegateDisclosure(_policyContract);
         iAPI3Pool = API3Pool(API3governance);
