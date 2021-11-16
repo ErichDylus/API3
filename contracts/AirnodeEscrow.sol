@@ -1,6 +1,6 @@
 //SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.10;
+pragma solidity 0.8.9;
 
 /// IN PROCESS AND INCOMPLETE, unaudited and for demonstration only, subject to all disclosures, licenses, and caveats of the open-source-law repo
 /// @author Erich Dylus
@@ -22,13 +22,12 @@ interface AirnodeRRP {
     function makeTemplateRequest(bytes32 templateId, address sponsor, address sponsorWallet, address fulfillAddress, bytes4 fulfillFunctionId, bytes calldata parameters) external returns (bytes32 requestId);
 }
 
-contract AirnodeEscrow {
+contract AirnodeEscrow is RrpRequester {
     
   address escrowAddress;
   address payable buyer;
   address payable seller;
   address stablecoin;
-  address airnodeRRP;
   uint256 deposit;
   uint256 effectiveTime;
   uint256 expirationTime;
@@ -39,6 +38,8 @@ contract AirnodeEscrow {
   IERC20 public ierc20;
   string description;
   mapping(address => bool) public parties; //map whether an address is a party to the transaction for restricted() modifier 
+  mapping(bytes32 => bool) public incomingFulfillments;
+  mapping(bytes32 => int256) public fulfilledData;
   
   event DealExpired(bool isExpired);
   event DealClosed(bool isClosed, uint256 effectiveTime); //event provides exact blockstamp Unix time of closing and oracle information
@@ -54,8 +55,10 @@ contract AirnodeEscrow {
   /// @param _seller is the seller's address, who will receive the purchase price if the deal closes
   /// @param _stablecoin is the token contract address for the stablecoin to be sent as deposit
   /// @param _secsUntilExpiration is the number of seconds until the deal expires, which can be converted to days for front end input or the code can be adapted accordingly
-  constructor(string memory _description, uint256 _deposit, address payable _seller, address _stablecoin, uint256 _secsUntilExpiration) payable {
+  /// @param _airnodeRrpAddress is the public address of the AirnodeRrp.sol protocol contract on the relevant blockchain used for this contract; see: https://docs.api3.org/airnode/v0.2/reference/airnode-addresses.html
+  constructor(string memory _description, uint256 _deposit, address payable _seller, address _stablecoin, uint256 _secsUntilExpiration, address _airnodeRrpAddress) payable {
       require(_seller != msg.sender, "Designate different party as seller");
+      RrpRequester(_airnodeRrpAddress);
       buyer = payable(address(msg.sender));
       deposit = _deposit;
       escrowAddress = address(this);
