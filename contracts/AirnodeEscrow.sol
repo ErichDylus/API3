@@ -6,7 +6,7 @@ pragma solidity 0.8.9;
 /// @author Erich Dylus
 /// @title Airnode Escrow
 /// @notice create a simple bilateral smart escrow contract, with an ERC20 stablecoin as payment, expiration denominated in seconds, deposit refunded if contract expires before closeDeal() called, contingent on a boolean Airnode response
-/// @dev intended to be deployed by buyer (as they will separately approve() the contract address for the deposited funds, and deposit is returned to deployer if expired); may be forked/altered for separation of deposit from purchase price, deposit non-refundability, etc.
+/// @dev intended to be deployed by buyer (as they will separately approve() the contract address for the deposited funds, and deposit is returned to deployer if expired); note the requester-sponsor structure as well: https://docs.api3.org/airnode/v0.2/grp-developers/requesters-sponsors.html
 
 import "@api3/airnode-protocol/contracts/rrp/requesters/RrpRequester.sol";
 
@@ -136,13 +136,13 @@ contract AirnodeEscrow is RrpRequester {
   /// @param parameters specify the API and reserved parameters (see Airnode ABI specifications at https://docs.api3.org/airnode/v0.2/reference/specifications/airnode-abi-specifications.html for how these are encoded)
   function callAirnode(address airnode, bytes32 endpointId, address sponsor, address sponsorWallet, bytes calldata parameters) external {
       bytes32 requestId = airnode.makeFullRequest( // Make the Airnode request
-          airnode,                        // airnode
-          endpointId,                     // endpointId
-          sponsor,                        // sponsor's address
-          sponsorWallet,                  // sponsorWallet
-          address(this),                  // fulfillAddress
-          this.airnodeCallback.selector,  // fulfillFunctionId
-          parameters                      // API parameters
+          airnode,                        
+          endpointId,                     
+          sponsor,                        
+          sponsorWallet,                  
+          address(this),                  
+          this.airnodeCallback.selector,  
+          parameters                      
           );
       incomingFulfillments[requestId] = true;
   }
@@ -159,7 +159,7 @@ contract AirnodeEscrow is RrpRequester {
     
   /// @notice checks if both buyer and seller are ready to close and expiration has not been met; if so, escrowAddress closes deal and pays seller; if not, deposit returned to buyer
   /// @dev if properly closes, emits event with effective time of closing
-  ///TODO: require airnode input
+  ///TODO: require airnode input to paySeller()
   function closeDeal() public returns(bool){
       require(sellerApproved && buyerApproved, "Parties are not ready to close.");
       if (expirationTime <= uint256(block.timestamp)) {
