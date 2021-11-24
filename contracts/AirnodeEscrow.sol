@@ -5,10 +5,10 @@ pragma solidity 0.8.9;
 /// IN PROCESS AND INCOMPLETE, unaudited and for demonstration only, subject to all disclosures, licenses, and caveats of the open-source-law repo
 /// @author Erich Dylus
 /// @title Airnode Escrow
-/// @notice create a simple bilateral smart escrow contract, with an ERC20 stablecoin as payment, expiration denominated in seconds, deposit refunded if contract expires before closeDeal() called, contingent on a boolean Airnode response
+/// @notice create a simple form bilateral smart escrow contract, with an ERC20 stablecoin as payment, expiration denominated in seconds, deposit refunded if contract expires before closeDeal() called, contingent on a boolean Airnode response
 /// @dev intended to be deployed by buyer (as they will separately approve() the contract address for the deposited funds, and deposit is returned to deployer if expired); note the requester-sponsor structure as well: https://docs.api3.org/airnode/v0.2/grp-developers/requesters-sponsors.html
 
-import "@api3/airnode-protocol/contracts/rrp/requesters/RrpRequester.sol";
+import "https://github.com/api3dao/airnode/blob/master/packages/airnode-protocol/contracts/rrp/AirnodeRrp.sol";
 
 interface IERC20 { 
     function approve(address spender, uint256 amount) external returns (bool); 
@@ -17,12 +17,11 @@ interface IERC20 {
     function transferFrom(address from, address to, uint256 value) external returns (bool);
 }
 
-contract AirnodeEscrow is RrpRequester {
+contract AirnodeEscrow is AirnodeRrp {
     
   address escrowAddress;
-  address payable buyer;
-  address payable seller;
-  address stablecoin;
+  address buyer;
+  address seller;
   uint256 deposit;
   uint256 effectiveTime;
   uint256 expirationTime;
@@ -51,14 +50,13 @@ contract AirnodeEscrow is RrpRequester {
   /// @param _stablecoin is the token contract address for the stablecoin to be sent as deposit
   /// @param _secsUntilExpiration is the number of seconds until the deal expires, which can be converted to days for front end input or the code can be adapted accordingly
   /// @param _airnodeRrpAddress is the public address of the AirnodeRrp.sol protocol contract on the relevant blockchain used for this contract; see: https://docs.api3.org/airnode/v0.2/reference/airnode-addresses.html
-  constructor(string memory _description, uint256 _deposit, address payable _seller, address _stablecoin, uint256 _secsUntilExpiration, address _airnodeRrpAddress) payable {
+  constructor(string memory _description, uint256 _deposit, address _seller, address _stablecoin, uint256 _secsUntilExpiration, address _airnodeRrpAddress) {
       require(_seller != msg.sender, "Designate different party as seller");
-      RrpRequester(_airnodeRrpAddress);
-      buyer = payable(address(msg.sender));
+      AirnodeRrp(_airnodeRrpAddress);
+      buyer = address(msg.sender);
       deposit = _deposit;
       escrowAddress = address(this);
-      stablecoin = _stablecoin;
-      ierc20 = IERC20(stablecoin);
+      ierc20 = IERC20(_stablecoin);
       description = _description;
       seller = _seller;
       parties[msg.sender] = true;
@@ -69,7 +67,7 @@ contract AirnodeEscrow is RrpRequester {
   
   /// @notice buyer may confirm seller's recipient address as extra security measure or change seller address
   /// @param _seller is the new recipient address of seller
-  function designateSeller(address payable _seller) external restricted {
+  function designateSeller(address _seller) external restricted {
       require(_seller != buyer, "Buyer cannot also be seller");
       require(!isExpired, "Too late to change seller");
       parties[_seller] = true;
@@ -141,16 +139,16 @@ contract AirnodeEscrow is RrpRequester {
           sponsor,                        
           sponsorWallet,                  
           address(this),                  
-          this.airnodeCallback.selector,  
+          this.fulfill.selector,  
           parameters                      
           );
       incomingFulfillments[requestId] = true;
   }
 
-  /// @dev the AirnodeRrp.sol protocol contract will callback here
+  /// @dev the AirnodeRrp.sol protocol contract will callback here to fulfill the request
   /// @param requestId generated when making the request and passed here as a reference to identify which request the response is for
   /// @param data for a successful response, the requested data which has been encoded. Decode by the function decode() from the abi object
-  function airnodeCallback(bytes32 requestId, bytes calldata data) external {
+  function fulfill(bytes32 requestId, bytes calldata data) external {
       require(incomingFulfillments[requestId], "No such request made");
       delete incomingFulfillments[requestId];
       bool decodedData = abi.decode(data, (bool));
