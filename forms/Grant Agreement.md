@@ -2,7 +2,7 @@
 
 // effective date should correspond to receipt of funds by the grantee. Bracketed items to be adjusted as relevant for each grantee
 
-// provided without warranty of any kind, do not use without consulting an attorney, all open-source-law repo disclosures apply
+// provided without warranty of any kind, do not use without consulting an attorney, repo [disclosures and disclaimers](https://github.com/ErichDylus/Open-Source-Law/blob/main/Disclosure.md) apply
 
 ## Grant Agreement
 
