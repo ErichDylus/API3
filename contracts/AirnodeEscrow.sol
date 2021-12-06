@@ -23,7 +23,6 @@ contract AirnodeEscrow is AirnodeRrp {
   address buyer;
   address seller;
   uint256 deposit;
-  uint256 effectiveTime;
   uint256 expirationTime;
   bool sellerApproved;
   bool buyerApproved;
@@ -50,7 +49,7 @@ contract AirnodeEscrow is AirnodeRrp {
   /// @param _stablecoin is the token contract address for the stablecoin to be sent as deposit
   /// @param _secsUntilExpiration is the number of seconds until the deal expires, which can be converted to days for front end input or the code can be adapted accordingly
   /// @param _airnodeRrpAddress is the public address of the AirnodeRrp.sol protocol contract on the relevant blockchain used for this contract; see: https://docs.api3.org/airnode/v0.2/reference/airnode-addresses.html
-  constructor(string memory _description, uint256 _deposit, address _seller, address _stablecoin, uint256 _secsUntilExpiration, address _airnodeRrpAddress) {
+  constructor(string memory _description, uint256 _deposit, uint256 _secsUntilExpiration, address _seller, address _stablecoin, address _airnodeRrpAddress) {
       require(_seller != msg.sender, "Designate different party as seller");
       AirnodeRrp(_airnodeRrpAddress);
       buyer = address(msg.sender);
@@ -167,8 +166,7 @@ contract AirnodeEscrow is AirnodeRrp {
         } else {
             isClosed = true;
             paySeller();
-            effectiveTime = uint256(block.timestamp); // effective time of closing upon payment to seller
-            emit DealClosed(isClosed, effectiveTime);
+            emit DealClosed(isClosed, block.timestamp); // confirmation of deal closing and effective time upon payment to seller
         }
         return(isClosed);
   }
