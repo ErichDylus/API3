@@ -8,7 +8,7 @@ pragma solidity 0.8.9;
 /// @notice create a simple form bilateral smart escrow contract, with an ERC20 stablecoin as payment, expiration denominated in seconds, deposit refunded if contract expires before closeDeal() called, contingent on a boolean Airnode response
 /// @dev intended to be deployed by buyer (as they will separately approve() the contract address for the deposited funds, and deposit is returned to deployer if expired); note the requester-sponsor structure as well: https://docs.api3.org/airnode/v0.2/grp-developers/requesters-sponsors.html
 
-import "https://github.com/api3dao/airnode/blob/master/packages/airnode-protocol/contracts/rrp/AirnodeRrp.sol";
+import "@api3/airnode-protocol/contracts/rrp/requesters/RrpRequester.sol";
 
 interface IERC20 { 
     function approve(address spender, uint256 amount) external returns (bool); 
@@ -17,13 +17,13 @@ interface IERC20 {
     function transferFrom(address from, address to, uint256 value) external returns (bool);
 }
 
-contract AirnodeEscrow is AirnodeRrp {
+contract AirnodeEscrow is RrpRequester {
     
   address escrowAddress;
   address buyer;
   address seller;
   uint256 deposit;
-  uint256 expirationTime;
+  uint256 expiryTime;
   bool sellerApproved;
   bool buyerApproved;
   bool isExpired;
@@ -47,11 +47,10 @@ contract AirnodeEscrow is AirnodeRrp {
   /// @param _deposit is the purchase price which will be deposited in the smart escrow contract
   /// @param _seller is the seller's address, who will receive the purchase price if the deal closes
   /// @param _stablecoin is the token contract address for the stablecoin to be sent as deposit
-  /// @param _secsUntilExpiration is the number of seconds until the deal expires, which can be converted to days for front end input or the code can be adapted accordingly
-  /// @param _airnodeRrpAddress is the public address of the AirnodeRrp.sol protocol contract on the relevant blockchain used for this contract; see: https://docs.api3.org/airnode/v0.2/reference/airnode-addresses.html
-  constructor(string memory _description, uint256 _deposit, uint256 _secsUntilExpiration, address _seller, address _stablecoin, address _airnodeRrpAddress) {
+  /// @param _secsUntilExpiry is the number of seconds until the deal expires, which can be converted to days for front end input or the code can be adapted accordingly
+  /// @param _airnodeRrp is the public address of the AirnodeRrp.sol protocol contract on the relevant blockchain used for this contract; see: https://docs.api3.org/airnode/v0.2/reference/airnode-addresses.html
+  constructor(string memory _description, uint256 _deposit, uint256 _secsUntilExpiry, address _seller, address _stablecoin, address _airnodeRrp) RrpRequester(_airnodeRrp) {
       require(_seller != msg.sender, "Designate different party as seller");
-      AirnodeRrp(_airnodeRrpAddress);
       buyer = address(msg.sender);
       deposit = _deposit;
       escrowAddress = address(this);
@@ -61,7 +60,7 @@ contract AirnodeEscrow is AirnodeRrp {
       parties[msg.sender] = true;
       parties[_seller] = true;
       parties[escrowAddress] = true;
-      expirationTime = block.timestamp + _secsUntilExpiration;
+      expiryTime = block.timestamp + _secsUntilExpiry;
   }
   
   /// @notice buyer may confirm seller's recipient address as extra security measure or change seller address
@@ -96,7 +95,7 @@ contract AirnodeEscrow is AirnodeRrp {
   
   /// @notice check if expired, and if so, return balance to buyer 
   function checkIfExpired() external returns(bool){
-        if (expirationTime <= uint256(block.timestamp)) {
+        if (expiryTime <= uint256(block.timestamp)) {
             isExpired = true;
             returnDeposit(); 
             emit DealExpired(isExpired);
@@ -132,7 +131,7 @@ contract AirnodeEscrow is AirnodeRrp {
   /// @param sponsorWallet the wallet created via mnemonic by the sponsor with the Admin CLI, funds within used by the airnode to pay gas. See https://docs.api3.org/airnode/v0.2/grp-developers/requesters-sponsors.html#what-is-a-sponsor
   /// @param parameters specify the API and reserved parameters (see Airnode ABI specifications at https://docs.api3.org/airnode/v0.2/reference/specifications/airnode-abi-specifications.html for how these are encoded)
   function callAirnode(address airnode, bytes32 endpointId, address sponsor, address sponsorWallet, bytes calldata parameters) external {
-      bytes32 requestId = airnode.makeFullRequest( // Make the Airnode request
+      bytes32 requestId = airnodeRrp.makeFullRequest( // Make the Airnode request
           airnode,                        
           endpointId,                     
           sponsor,                        
@@ -147,10 +146,10 @@ contract AirnodeEscrow is AirnodeRrp {
   /// @dev the AirnodeRrp.sol protocol contract will callback here to fulfill the request
   /// @param requestId generated when making the request and passed here as a reference to identify which request the response is for
   /// @param data for a successful response, the requested data which has been encoded. Decode by the function decode() from the abi object
-  function fulfill(bytes32 requestId, bytes calldata data) external {
+  function fulfill(bytes32 requestId, bytes calldata data) external onlyAirnodeRrp {
       require(incomingFulfillments[requestId], "No such request made");
       delete incomingFulfillments[requestId];
-      bool decodedData = abi.decode(data, (bool));
+      int256 decodedData = abi.decode(data, (int256));
       fulfilledData[requestId] = decodedData;
   }
     
@@ -159,7 +158,7 @@ contract AirnodeEscrow is AirnodeRrp {
   ///TODO: require airnode input to paySeller()
   function closeDeal() public returns(bool){
       require(sellerApproved && buyerApproved, "Parties are not ready to close.");
-      if (expirationTime <= uint256(block.timestamp)) {
+      if (expiryTime <= uint256(block.timestamp)) {
             isExpired = true;
             returnDeposit();
             emit DealExpired(isExpired);
