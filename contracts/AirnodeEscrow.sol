@@ -38,7 +38,7 @@ contract AirnodeEscrow is RrpRequester {
   event DealClosed(bool isClosed, uint256 effectiveTime); //event provides exact blockstamp Unix time of closing and oracle information
   
   modifier restricted() { 
-    require(parties[msg.sender], "This may only be called by a party to the deal or the by escrow contract");
+    require(parties[msg.sender], "Restricted to parties[] and address(this)");
     _;
   }
   
@@ -50,7 +50,7 @@ contract AirnodeEscrow is RrpRequester {
   /// @param _secsUntilExpiry is the number of seconds until the deal expires, which can be converted to days for front end input or the code can be adapted accordingly
   /// @param _airnodeRrp is the public address of the AirnodeRrp.sol protocol contract on the relevant blockchain used for this contract; see: https://docs.api3.org/airnode/v0.2/reference/airnode-addresses.html
   constructor(string memory _description, uint256 _deposit, uint256 _secsUntilExpiry, address _seller, address _stablecoin, address _airnodeRrp) RrpRequester(_airnodeRrp) {
-      require(_seller != msg.sender, "Designate different party as seller");
+      require(_seller != msg.sender, "Seller must be different address");
       buyer = address(msg.sender);
       deposit = _deposit;
       escrowAddress = address(this);
@@ -67,7 +67,7 @@ contract AirnodeEscrow is RrpRequester {
   /// @param _seller is the new recipient address of seller
   function designateSeller(address _seller) external restricted {
       require(_seller != buyer, "Buyer cannot also be seller");
-      require(!isExpired, "Too late to change seller");
+      require(!isExpired, "Expired");
       parties[_seller] = true;
       seller = _seller;
   }
@@ -75,7 +75,7 @@ contract AirnodeEscrow is RrpRequester {
   /// ********* DEPLOYER MUST SEPARATELY APPROVE (by interacting with the ERC20 contract in question's approve()) this contract address for the deposit amount (keep decimals in mind) ********
   /// @notice buyer deposits in escrowAddress after separately ERC20-approving escrowAddress
   function depositInEscrow() public restricted returns(bool, uint256) {
-      require(msg.sender == buyer, "Only buyer may deposit in escrow");
+      require(msg.sender == buyer, "Only buyer may deposit");
       ierc20.transferFrom(buyer, escrowAddress, deposit);
       return (true, ierc20.balanceOf(escrowAddress));
       
@@ -114,12 +114,12 @@ contract AirnodeEscrow is RrpRequester {
   function readyToClose() external restricted returns(string memory){
          if (msg.sender == seller) {
             sellerApproved = true;
-            return("Seller is ready to close.");
+            return("Seller ready to close.");
         } else if (msg.sender == buyer) {
             buyerApproved = true;
-            return("Buyer is ready to close.");
+            return("Buyer ready to close.");
         } else {
-            return("You are neither buyer nor seller.");
+            return("Neither buyer nor seller.");
         }
   }
   
@@ -157,7 +157,7 @@ contract AirnodeEscrow is RrpRequester {
   /// @dev if properly closes, emits event with effective time of closing
   ///TODO: require airnode input to paySeller()
   function closeDeal() public returns(bool){
-      require(sellerApproved && buyerApproved, "Parties are not ready to close.");
+      require(sellerApproved && buyerApproved, "Parties not ready to close.");
       if (expiryTime <= uint256(block.timestamp)) {
             isExpired = true;
             returnDeposit();
