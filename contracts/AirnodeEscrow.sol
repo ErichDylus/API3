@@ -1,12 +1,12 @@
 //SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.9;
+pragma solidity ^0.8.9;
 
 /// IN PROCESS AND INCOMPLETE, unaudited and for demonstration only, subject to all disclosures, licenses, and caveats of the open-source-law repo
 /// @author Erich Dylus
 /// @title Airnode Escrow
-/// @notice create a simple form bilateral smart escrow contract, with an ERC20 stablecoin as payment, expiration denominated in seconds, deposit refunded if contract expires before closeDeal() called, contingent on a boolean Airnode response
-/// @dev intended to be deployed by buyer (as they will separately approve() the contract address for the deposited funds, and deposit is returned to deployer if expired); note the requester-sponsor structure as well: https://docs.api3.org/airnode/v0.2/grp-developers/requesters-sponsors.html
+/// @notice bilateral smart escrow contract, with an ERC20 stablecoin as payment, expiration denominated in seconds, deposit refunded if contract expires before closeDeal() called, contingent on a boolean Airnode response
+/// @dev buyer should deploy (as they will separately approve() the contract address for the deposited funds, and deposit is returned to deployer if expired); note the requester-sponsor structure as well: https://docs.api3.org/airnode/v0.2/grp-developers/requesters-sponsors.html
 
 import "@api3/airnode-protocol/contracts/rrp/requesters/RrpRequester.sol";
 
@@ -38,7 +38,7 @@ contract AirnodeEscrow is RrpRequester {
   event DealClosed(bool isClosed, uint256 effectiveTime); //event provides exact blockstamp Unix time of closing and oracle information
   
   modifier restricted() { 
-    require(parties[msg.sender], "Restricted to parties[] and address(this)");
+    require(parties[msg.sender], "Only parties[]");
     _;
   }
   
@@ -50,7 +50,7 @@ contract AirnodeEscrow is RrpRequester {
   /// @param _secsUntilExpiry is the number of seconds until the deal expires, which can be converted to days for front end input or the code can be adapted accordingly
   /// @param _airnodeRrp is the public address of the AirnodeRrp.sol protocol contract on the relevant blockchain used for this contract; see: https://docs.api3.org/airnode/v0.2/reference/airnode-addresses.html
   constructor(string memory _description, uint256 _deposit, uint256 _secsUntilExpiry, address _seller, address _stablecoin, address _airnodeRrp) RrpRequester(_airnodeRrp) {
-      require(_seller != msg.sender, "Seller must be different address");
+      require(_seller != msg.sender, "Buyer Address");
       buyer = address(msg.sender);
       deposit = _deposit;
       escrowAddress = address(this);
@@ -66,7 +66,7 @@ contract AirnodeEscrow is RrpRequester {
   /// @notice buyer may confirm seller's recipient address as extra security measure or change seller address
   /// @param _seller is the new recipient address of seller
   function designateSeller(address _seller) external restricted {
-      require(_seller != buyer, "Buyer cannot also be seller");
+      require(_seller != buyer, "Buyer Address");
       require(!isExpired, "Expired");
       parties[_seller] = true;
       seller = _seller;
@@ -147,7 +147,7 @@ contract AirnodeEscrow is RrpRequester {
   /// @param requestId generated when making the request and passed here as a reference to identify which request the response is for
   /// @param data for a successful response, the requested data which has been encoded. Decode by the function decode() from the abi object
   function fulfill(bytes32 requestId, bytes calldata data) external onlyAirnodeRrp {
-      require(incomingFulfillments[requestId], "No such request made");
+      require(incomingFulfillments[requestId], "No Request");
       delete incomingFulfillments[requestId];
       int256 decodedData = abi.decode(data, (int256));
       fulfilledData[requestId] = decodedData;
@@ -157,7 +157,7 @@ contract AirnodeEscrow is RrpRequester {
   /// @dev if properly closes, emits event with effective time of closing
   ///TODO: require airnode input to paySeller()
   function closeDeal() public returns(bool){
-      require(sellerApproved && buyerApproved, "Parties not ready to close.");
+      require(sellerApproved && buyerApproved, "Not Approved");
       if (expiryTime <= uint256(block.timestamp)) {
             isExpired = true;
             returnDeposit();
