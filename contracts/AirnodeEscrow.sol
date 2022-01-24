@@ -36,6 +36,9 @@ contract AirnodeEscrow is RrpRequester {
   
   event DealExpired(bool isExpired);
   event DealClosed(bool isClosed, uint256 effectiveTime); //event provides exact blockstamp Unix time of closing and oracle information
+
+  error BuyerAddress();
+  error NotApproved();
   
   modifier restricted() { 
     require(parties[msg.sender], "Only parties[]");
@@ -50,7 +53,7 @@ contract AirnodeEscrow is RrpRequester {
   /// @param _secsUntilExpiry is the number of seconds until the deal expires, which can be converted to days for front end input or the code can be adapted accordingly
   /// @param _airnodeRrp is the public address of the AirnodeRrp.sol protocol contract on the relevant blockchain used for this contract; see: https://docs.api3.org/airnode/v0.2/reference/airnode-addresses.html
   constructor(string memory _description, uint256 _deposit, uint256 _secsUntilExpiry, address _seller, address _stablecoin, address _airnodeRrp) RrpRequester(_airnodeRrp) {
-      require(_seller != msg.sender, "Buyer Address");
+      if (_seller == msg.sender) revert BuyerAddress();
       buyer = address(msg.sender);
       deposit = _deposit;
       escrowAddress = address(this);
@@ -66,7 +69,7 @@ contract AirnodeEscrow is RrpRequester {
   /// @notice buyer may confirm seller's recipient address as extra security measure or change seller address
   /// @param _seller is the new recipient address of seller
   function designateSeller(address _seller) external restricted {
-      require(_seller != buyer, "Buyer Address");
+      if (_seller == buyer) revert BuyerAddress();
       require(!isExpired, "Expired");
       parties[_seller] = true;
       seller = _seller;
@@ -157,7 +160,7 @@ contract AirnodeEscrow is RrpRequester {
   /// @dev if properly closes, emits event with effective time of closing
   ///TODO: require airnode input to paySeller()
   function closeDeal() public returns(bool){
-      require(sellerApproved && buyerApproved, "Not Approved");
+      if (!sellerApproved || !buyerApproved) revert NotApproved();
       if (expiryTime <= uint256(block.timestamp)) {
             isExpired = true;
             returnDeposit();
