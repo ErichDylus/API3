@@ -38,7 +38,9 @@ contract AirnodeEscrow is RrpRequester {
   event DealClosed(bool isClosed, uint256 effectiveTime); //event provides exact blockstamp Unix time of closing and oracle information
 
   error BuyerAddress();
+  error Expired();
   error NotApproved();
+  error OnlyBuyer();
   
   modifier restricted() { 
     require(parties[msg.sender], "Only parties[]");
@@ -70,15 +72,15 @@ contract AirnodeEscrow is RrpRequester {
   /// @param _seller is the new recipient address of seller
   function designateSeller(address _seller) external restricted {
       if (_seller == buyer) revert BuyerAddress();
-      require(!isExpired, "Expired");
+      if (isExpired) revert Expired();
       parties[_seller] = true;
       seller = _seller;
   }
   
   /// ********* DEPLOYER MUST SEPARATELY APPROVE (by interacting with the ERC20 contract in question's approve()) this contract address for the deposit amount (keep decimals in mind) ********
   /// @notice buyer deposits in escrowAddress after separately ERC20-approving escrowAddress
-  function depositInEscrow() public restricted returns(bool, uint256) {
-      require(msg.sender == buyer, "Only buyer may deposit");
+  function depositInEscrow() public returns(bool, uint256) {
+      if (msg.sender != buyer) revert OnlyBuyer();
       ierc20.transferFrom(buyer, escrowAddress, deposit);
       return (true, ierc20.balanceOf(escrowAddress));
       
@@ -98,10 +100,10 @@ contract AirnodeEscrow is RrpRequester {
   
   /// @notice check if expired, and if so, return balance to buyer 
   function checkIfExpired() external returns(bool){
-        if (expiryTime <= uint256(block.timestamp)) {
+        if (expiryTime <= block.timestamp) {
             isExpired = true;
             returnDeposit(); 
-            emit DealExpired(isExpired);
+            emit DealExpired(true);
         } else {
             isExpired = false;
         }
@@ -161,14 +163,14 @@ contract AirnodeEscrow is RrpRequester {
   ///TODO: require airnode input to paySeller()
   function closeDeal() public returns(bool){
       if (!sellerApproved || !buyerApproved) revert NotApproved();
-      if (expiryTime <= uint256(block.timestamp)) {
+      if (expiryTime <= block.timestamp) {
             isExpired = true;
             returnDeposit();
-            emit DealExpired(isExpired);
+            emit DealExpired(true);
         } else {
             isClosed = true;
             paySeller();
-            emit DealClosed(isClosed, block.timestamp); // confirmation of deal closing and effective time upon payment to seller
+            emit DealClosed(true, block.timestamp); // confirmation of deal closing and effective time upon payment to seller
         }
         return(isClosed);
   }
