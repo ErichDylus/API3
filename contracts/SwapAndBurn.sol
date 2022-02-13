@@ -33,10 +33,10 @@ contract SushiswapAndBurnAPI3 {
 
     function receiveAndSwap() public payable {
         if (msg.value == 0) revert NoETHSent();
-        sushiRouter.swapExactETHForTokens{ value: msg.value }(0, getPathForETHtoAPI3(), address(this), block.timestamp+100);
+        sushiRouter.swapExactETHForTokens{ value: msg.value }(0, _getPathForETHtoAPI3(), address(this), block.timestamp+100);
     }
     
-    function getPathForETHtoAPI3() private view returns (address[] memory) {
+    function _getPathForETHtoAPI3() private view returns (address[] memory) {
         address[] memory path = new address[](2);
         path[0] = sushiRouter.WETH();
         path[1] = API3Token;
