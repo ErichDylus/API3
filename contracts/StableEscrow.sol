@@ -3,7 +3,7 @@
 pragma solidity ^0.8.9;
 
 /// unaudited and for demonstration only, provided without warranty of any kind, subject to all disclosures, licenses, and caveats of the open-source-law repo
-/// building at ETHDenver to demonstrate API3 Beacons powered by Amberdata
+/// building at ETHDenver using API3 Beacons powered by Amberdata
 /// @title Stable Escrow
 /// @notice ERC20 stablecoin smart escrow contract, with a volatility check via Beacon
 /// @dev intended to be deployed by buyer (they will separately approve() the contract address for the deposited funds, and deposit is returned to deployer if expired)
@@ -45,7 +45,7 @@ contract StableEscrow {
   error OnlyBuyer();
 
   event DealExpired(bool isExpired);
-  event UnstableCoin(int224 value, uint256 effectiveTime);
+  event UnstableCoin(int224 value, uint256 timestamp);
   event DealClosed(bool isClosed, uint256 effectiveTime); //event provides exact blockstamp Unix time of closing and oracle information
   
   modifier restricted() { 
@@ -53,11 +53,11 @@ contract StableEscrow {
     _;
   }
   
-  /// @notice deployer (buyer) initiates escrow with description, deposit amount in USD, address of DAI stablecoin, seconds until expiry, and designate recipient seller
-  /// @param _description should be a brief identifier of the deal in question - perhaps as to parties/underlying asset/documentation reference/hash 
+  /// @notice deployer (buyer) initiates escrow with description, deposit amount in USD, stablecoin contract address, seconds until expiry, and designate recipient seller
+  /// @param _description a brief identifier of the deal in question - ex.) parties/underlying asset/documentation reference/hash 
   /// @param _deposit is the purchase price which will be deposited in the smart escrow contract
   /// @param _seller is the seller's address, who will receive the purchase price if the deal closes
-  /// @param _stablecoin is the token contract address for the stablecoin to be sent as deposit
+  /// @param _stablecoin is the token contract address for the stablecoin to be sent as deposit, blockchain-dependent unlike the beaconID
   /// @param _secsUntilExpiry is the number of seconds until the deal expires, which can be converted to days for front end input or the code can be adapted accordingly
   /// @param _beaconRrp is the public address of the RrpBeaconServer.sol protocol contract on the relevant blockchain used for this contract; see: https://docs.api3.org/beacon/v0.1/reference/contract-addresses.html
   /// @param _selfServeBeaconWhitelister is the public address of the SelfServeRrpBeaconServerWhitelister.sol protocol contract on the relevant blockchain used for this contract; see: https://docs.api3.org/beacon/v0.1/reference/contract-addresses.html
@@ -88,7 +88,7 @@ contract StableEscrow {
       seller = _seller;
   }
   
-  /// ********* DEPLOYER MUST SEPARATELY APPROVE (by interacting with the ERC20 contract in question's approve()) this contract address for the deposit amount (keep decimals in mind) ********
+  /// ********* DEPLOYER MUST SEPARATELY APPROVE (by directly interacting with the _stablecoin address's approve() function) escrowAddress for the deposit amount (keep decimals in mind) ********
   /// @notice buyer deposits in escrowAddress after separately ERC20-approving escrowAddress
   function depositInEscrow() public restricted returns(bool, uint256) {
       if (msg.sender != buyer) revert OnlyBuyer();
