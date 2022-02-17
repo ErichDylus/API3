@@ -2,11 +2,11 @@
 
 pragma solidity ^0.8.9;
 
-/// IN PROCESS AND INCOMPLETE, unaudited and for demonstration only, subject to all disclosures, licenses, and caveats of the open-source-law repo
-/// building at ETHDenver to demonstrate Beacons
+/// unaudited and for demonstration only, provided without warranty of any kind, subject to all disclosures, licenses, and caveats of the open-source-law repo
+/// building at ETHDenver to demonstrate API3 Beacons powered by Amberdata
 /// @title Stable Escrow
-/// @notice ERC20 stablecoin smart escrow contract, with a volatility check via API3 Beacons
-/// @dev intended to be deployed by buyer (they will separately approve() the contract address for the deposited funds, and deposit is returned to deployer if expired); note the requester-sponsor structure as well: https://docs.api3.org/airnode/v0.2/grp-developers/requesters-sponsors.html
+/// @notice ERC20 stablecoin smart escrow contract, with a volatility check via Beacon
+/// @dev intended to be deployed by buyer (they will separately approve() the contract address for the deposited funds, and deposit is returned to deployer if expired)
 
 interface IERC20 { 
     function balanceOf(address account) external view returns (uint256);
@@ -41,11 +41,11 @@ contract StableEscrow {
   mapping(address => bool) public parties; //map whether an address is a party to the transaction for restricted() modifier 
   
   error BuyerAddress();
-  error Expired();
   error NotApproved();
   error OnlyBuyer();
 
   event DealExpired(bool isExpired);
+  event UnstableCoin(int224 value, uint256 effectiveTime);
   event DealClosed(bool isClosed, uint256 effectiveTime); //event provides exact blockstamp Unix time of closing and oracle information
   
   modifier restricted() { 
@@ -84,7 +84,6 @@ contract StableEscrow {
   /// @param _seller is the new recipient address of seller
   function designateSeller(address _seller) external restricted {
       if (_seller == buyer) revert BuyerAddress();
-      if (isExpired) revert Expired();
       parties[_seller] = true;
       seller = _seller;
   }
@@ -128,24 +127,24 @@ contract StableEscrow {
   }
 
   /// if buyer wishes to initiate dispute over seller breach of off chain agreement or repudiate, simply may wait for expiration without sending deposit nor calling this function
-  function readyToClose() external restricted returns(string memory){
-         if (msg.sender == seller) {
+  function readyToClose() external restricted {
+        if (msg.sender == seller) {
             sellerApproved = true;
-            return("Seller ready to close.");
         } else if (msg.sender == buyer) {
             buyerApproved = true;
-            return("Buyer ready to close.");
-        } else {
-            return("Neither buyer nor seller.");
         }
   }
     
-  /// @notice checks if both buyer and seller are ready to close and expiration has not been met; if so, escrowAddress closes deal and pays seller; if not, deposit returned to buyer
+  /// @notice checks if parties are ready to close, if price of DAI is not >3% off $1 peg, and if not expired; if so, escrowAddress closes deal and pays seller; if not, deposit returned to buyer
   /// @dev if properly closes, emits event with effective time of closing
-  function closeDeal() public returns(bool){
-      if (!sellerApproved || !buyerApproved) revert NotApproved();
-      ibeacon.readBeacon(DAIbeaconID);
-      if (expiryTime <= uint256(block.timestamp)) {
+  function closeDeal() public returns(bool) {
+        if (!sellerApproved || !buyerApproved) revert NotApproved();
+        (int224 _value, uint32 _timestamp) = ibeacon.readBeacon(DAIbeaconID);
+        if (_value < 970000 || _value > 1030000) {
+            _returnDeposit();
+            emit UnstableCoin(_value, _timestamp);
+        }
+        if (expiryTime <= uint256(block.timestamp)) {
             isExpired = true;
             _returnDeposit();
             emit DealExpired(isExpired);
