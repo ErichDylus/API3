@@ -141,8 +141,7 @@ contract StableEscrow {
         if (!sellerApproved || !buyerApproved) revert NotApproved();
         (int224 _value, uint32 _timestamp) = ibeacon.readBeacon(DAIbeaconID);
         if (_value < 970000 || _value > 1030000) {
-            _returnDeposit();
-            emit UnstableCoin(_value, _timestamp);
+            emit UnstableCoin(_value, _timestamp); // alternatively, could choose to automatically call _returnDeposit()
         }
         if (expiryTime <= uint256(block.timestamp)) {
             isExpired = true;
