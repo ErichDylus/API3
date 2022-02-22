@@ -139,7 +139,7 @@ contract StableEscrow {
   /// @dev if properly closes, emits event with effective time of closing
   function closeDeal() public returns(bool) {
         if (!sellerApproved || !buyerApproved) revert NotApproved();
-        (int224 _value, uint32 _timestamp) = ibeacon.readBeacon(DAIbeaconID);
+        (int224 _value, uint32 _timestamp) = ibeacon.readBeacon(DAIbeaconID); // hardcoded DAI for testing, could have selection between DAI/USDC/USDT Beacon IDs in future versions
         if (_value < 970000 || _value > 1030000) {
             emit UnstableCoin(_value, _timestamp); // alternatively, could choose to automatically call _returnDeposit()
         }
