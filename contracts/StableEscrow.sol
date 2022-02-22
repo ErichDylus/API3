@@ -46,7 +46,7 @@ contract StableEscrow {
 
   event DealExpired(bool isExpired);
   event UnstableCoin(int224 value, uint256 timestamp);
-  event DealClosed(bool isClosed, uint256 effectiveTime); //event provides exact blockstamp Unix time of closing and oracle information
+  event DealClosed(bool isClosed, int224 _value, uint256 effectiveTime); //event provides exact blockstamp time of closing and oracle information
   
   modifier restricted() { 
     require(parties[msg.sender], "Only parties[]");
@@ -110,14 +110,12 @@ contract StableEscrow {
   } 
   
   /// @notice check if expired, and if so, return balance to buyer 
-  function checkIfExpired() external returns(bool){
+  function checkIfExpired() external returns(bool) {
         if (expiryTime <= uint256(block.timestamp)) {
             isExpired = true;
             _returnDeposit(); 
             emit DealExpired(isExpired);
-        } else {
-            isExpired = false;
-        }
+        } else {}
         return(isExpired);
     }
     
@@ -137,7 +135,7 @@ contract StableEscrow {
     
   /// @notice checks if parties are ready to close, if price of DAI is not >3% off $1 peg, and if not expired; if so, escrowAddress closes deal and pays seller; if not, deposit returned to buyer
   /// @dev if properly closes, emits event with effective time of closing
-  function closeDeal() public returns(bool) {
+  function closeDeal() public returns(bool, int224) {
         if (!sellerApproved || !buyerApproved) revert NotApproved();
         (int224 _value, uint32 _timestamp) = ibeacon.readBeacon(DAIbeaconID); // hardcoded DAI for testing, could have selection between DAI/USDC/USDT Beacon IDs in future versions
         if (_value < 970000 || _value > 1030000) {
@@ -150,8 +148,8 @@ contract StableEscrow {
         } else {
             isClosed = true;
             _paySeller();
-            emit DealClosed(isClosed, block.timestamp); // confirmation of deal closing and effective time upon payment to seller
+            emit DealClosed(isClosed, _value, block.timestamp); // confirmation of deal closing and effective time upon payment to seller
         }
-        return(isClosed);
+        return(isClosed, _value);
   }
 }
