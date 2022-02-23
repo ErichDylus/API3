@@ -1,14 +1,14 @@
 //SPDX-License-Identifier: MIT
-// IN PROCESS AND INCOMPLETE, DO NOT USE FOR ANY PURPOSE
+// FOR TESTING ONLY, DO NOT USE
 // unaudited, provided without warranty of any kind, and subject to all disclosures, licenses, and caveats of this repo
 
 pragma solidity ^0.8.0;
 
 /// @title Swap and Burn API3
-/// @notice uses Sushiswap router to swap incoming ETH for API3 tokens, then burns the API3 tokens
+/// @notice uses Sushiswap router to swap incoming ETH for API3 tokens, then burns the API3 tokens via the token contract
+/// simple programmatic token burn per API3 whitepaper 
 
 interface IUniswapV2Router02 {
-    // note: consider swapExactETHForTokensSupportingFeeOnTransferTokens() for sushiswap, same params
     function swapExactETHForTokens(uint256 amountOutMin, address[] calldata path, address to, uint256 deadline) external payable returns (uint256[] memory amounts);
     function WETH() external pure returns (address);
 }
@@ -36,6 +36,7 @@ contract SwapAndBurnAPI3 {
         iAPI3Token.updateBurnerStatus(true);
     }
 
+    /// @notice FOR TESTING ONLY - DO NOT USE
     function receiveAndSwap() public payable {
         if (msg.value == 0) revert NoETHSent();
         sushiRouter.swapExactETHForTokens{ value: msg.value }(0, _getPathForETHtoAPI3(), address(this), block.timestamp+100);
