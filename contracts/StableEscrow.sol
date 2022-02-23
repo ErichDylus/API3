@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.9;
 
-/// unaudited and for demonstration only, provided without warranty of any kind, subject to all disclosures, licenses, and caveats of the open-source-law repo
+/// unaudited and for demonstration only, provided without warranty of any kind, subject to all disclosures, licenses, and caveats of this repo
 /// building at ETHDenver using API3 Beacons powered by Amberdata
 /// @title Stable Escrow
 /// @notice ERC20 stablecoin smart escrow contract, with a volatility check via Beacon
@@ -138,10 +138,12 @@ contract StableEscrow {
   function closeDeal() public returns(bool, int224) {
         if (!sellerApproved || !buyerApproved) revert NotApproved();
         (int224 _value, uint32 _timestamp) = ibeacon.readBeacon(DAIbeaconID); // hardcoded DAI for testing, could have selection between DAI/USDC/USDT Beacon IDs in future versions
-        if (_value < 970000 || _value > 1030000) {
-            emit UnstableCoin(_value, _timestamp); // alternatively, could choose to automatically call _returnDeposit()
+        if (_value < 970000 || _value > 1030000) /* if the DAI price is +- 3% off $1 peg */ {
+            _returnDeposit(); // alternatively, could merely alert the parties the stablecoin is off peg, but seller would likely prefer deposit is returned & another token or mechanism used if the peg is lost
+            isClosed = false;
+            emit UnstableCoin(_value, _timestamp);
         }
-        if (expiryTime <= uint256(block.timestamp)) {
+        else if (expiryTime <= uint256(block.timestamp)) {
             isExpired = true;
             _returnDeposit();
             emit DealExpired(isExpired);
