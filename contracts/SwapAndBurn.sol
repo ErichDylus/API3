@@ -1,6 +1,9 @@
 //SPDX-License-Identifier: MIT
-// FOR TESTING ONLY, DO NOT USE
-// unaudited, provided without warranty of any kind, and subject to all disclosures, licenses, and caveats of this repo
+/**** 
+***** this code and any deployments of this code are strictly provided as-is; no guarantee, representation or warranty is being made, express or implied, as to the safety or correctness of the code 
+***** or any smart contracts or other software deployed from these files, in accordance with the disclosures and licenses found here: https://github.com/ErichDylus/API3/blob/main/contracts/README.md
+***** this code is not audited, and users, developers, or adapters of these files should proceed with caution and use at their own risk.
+****/
 
 pragma solidity ^0.8.0;
 
@@ -22,13 +25,13 @@ interface IAPI3 {
 contract SwapAndBurnAPI3 {
 
     address constant API3_TOKEN_ADDR = 0x0b38210ea11411557c13457D4dA7dC6ea731B88a; // API3 token address
+    address constant WETH_ADDR = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2; // WETH mainnet token address, alteratively could call sushiRouter.WETH() for the path
     address constant SUSHI_ROUTER_ADDR = 0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F; // Sushiswap router contract address
 
     IUniswapV2Router02 public sushiRouter;
     IAPI3 public iAPI3Token;
 
-    error NoETHSent();
-    error NoAPI3();
+    error NoAPI3Tokens();
 
     constructor() payable {
         sushiRouter = IUniswapV2Router02(SUSHI_ROUTER_ADDR);
@@ -36,25 +39,22 @@ contract SwapAndBurnAPI3 {
         iAPI3Token.updateBurnerStatus(true);
     }
 
-    /// @notice FOR TESTING ONLY - DO NOT USE
-    function receiveAndSwap() public payable {
-        if (msg.value == 0) revert NoETHSent();
-        sushiRouter.swapExactETHForTokens{ value: msg.value }(0, _getPathForETHtoAPI3(), address(this), block.timestamp+100);
+    /// @notice receives ETH sent to address(this), swaps for API3, and calls the internal _burnAPI3() function
+    receive() external payable {
+        sushiRouter.swapExactETHForTokens{ value: msg.value }(0, _getPathForETHtoAPI3(), address(this), block.timestamp);
         _burnAPI3();
     }
 
     function _burnAPI3() internal {
-        if (iAPI3Token.balanceOf(address(this)) == 0) revert NoAPI3();
+        if (iAPI3Token.balanceOf(address(this)) == 0) revert NoAPI3Tokens();
         iAPI3Token.burn(iAPI3Token.balanceOf(address(this)));
     }
     
-    /// @return the router path for ETH/API3 swap for the receiveAndSwap() function
-    function _getPathForETHtoAPI3() internal view returns (address[] memory) {
+    /// @return the router path for ETH/API3 swap
+    function _getPathForETHtoAPI3() internal pure returns (address[] memory) {
         address[] memory path = new address[](2);
-        path[0] = sushiRouter.WETH(); //0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
+        path[0] = WETH_ADDR;
         path[1] = API3_TOKEN_ADDR;
         return path;
     }
-
-    receive() payable external {}
 }
