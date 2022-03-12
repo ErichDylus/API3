@@ -5,7 +5,7 @@
 ***** this code is not audited, and users, developers, or adapters of these files should proceed with caution and use at their own risk.
 ****/
 
-pragma solidity ^0.8.0;
+pragma solidity >=0.8.0;
 
 /// @title Swap and Burn API3
 /// @notice uses Sushiswap router to swap incoming ETH for API3 tokens, then burns the API3 tokens via the token contract
@@ -13,7 +13,6 @@ pragma solidity ^0.8.0;
 
 interface IUniswapV2Router02 {
     function swapExactETHForTokens(uint256 amountOutMin, address[] calldata path, address to, uint256 deadline) external payable returns (uint256[] memory amounts);
-    function WETH() external pure returns (address);
 }
 
 interface IAPI3 { 
