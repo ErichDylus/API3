@@ -1,11 +1,14 @@
 //SPDX-License-Identifier: MIT
-
-pragma solidity ^0.8.9;
+/**** 
+***** this code and any deployments of this code are strictly provided as-is; no guarantee, representation or warranty is being made, express or implied, as to the safety or correctness of the code 
+***** or any smart contracts or other software deployed from these files, in accordance with the disclosures and licenses found here: https://github.com/ErichDylus/API3/blob/main/contracts/README.md
+***** this code is not audited, and users, developers, or adapters of these files should proceed with caution and use at their own risk.
+****/
+pragma solidity >=0.8.9;
 
 /// IN PROCESS AND INCOMPLETE, unaudited and for demonstration only, subject to all disclosures, licenses, and caveats of the open-source-law repo
-/// @author Erich Dylus
 /// @title Airnode Escrow
-/// @notice bilateral smart escrow contract, with an ERC20 stablecoin as payment, expiration denominated in seconds, deposit refunded if contract expires before closeDeal() called, contingent on a boolean Airnode response
+/// @notice bilateral smart escrow contract, with an ERC20 stablecoin as payment, expiration denominated in seconds, deposit refunded if contract expires before closeDeal() called, contingent on valid Airnode response as parameterized in _closeDeal()
 /// @dev buyer should deploy (as they will separately approve() the contract address for the deposited funds, and deposit is returned to deployer if expired); note the requester-sponsor structure as well: https://docs.api3.org/airnode/v0.2/grp-developers/requesters-sponsors.html
 
 import "@api3/airnode-protocol/contracts/rrp/requesters/RrpRequester.sol";
@@ -41,6 +44,7 @@ contract AirnodeEscrow is RrpRequester {
   error Expired();
   error NotApproved();
   error OnlyBuyer();
+  error OracleConditionNotSatisfied();
   
   modifier restricted() { 
     require(parties[msg.sender], "Only parties[]");
@@ -79,7 +83,7 @@ contract AirnodeEscrow is RrpRequester {
   
   /// ********* DEPLOYER MUST SEPARATELY APPROVE (by interacting with the ERC20 contract in question's approve()) this contract address for the deposit amount (keep decimals in mind) ********
   /// @notice buyer deposits in escrowAddress after separately ERC20-approving escrowAddress
-  function depositInEscrow() public returns(bool, uint256) {
+  function depositInEscrow() external returns(bool, uint256) {
       if (msg.sender != buyer) revert OnlyBuyer();
       ierc20.transferFrom(buyer, escrowAddress, deposit);
       return (true, ierc20.balanceOf(escrowAddress));
@@ -87,22 +91,22 @@ contract AirnodeEscrow is RrpRequester {
   }
   
   /// @notice escrowAddress returns deposit to buyer
-  function returnDeposit() internal returns(bool, uint256) {
+  function _returnDeposit() internal returns(bool, uint256) {
       ierc20.transfer(buyer, deposit);
       return (true, ierc20.balanceOf(escrowAddress));
   }
   
   /// @notice escrowAddress sends deposit to seller
-  function paySeller() internal returns(bool, uint256) {
+  function _paySeller() internal returns(bool, uint256) {
       ierc20.transfer(seller, deposit);
       return (true, ierc20.balanceOf(escrowAddress));
   } 
   
   /// @notice check if expired, and if so, return balance to buyer 
-  function checkIfExpired() external returns(bool){
+  function checkIfExpired() external returns(bool) {
         if (expiryTime <= block.timestamp) {
             isExpired = true;
-            returnDeposit(); 
+            _returnDeposit(); 
             emit DealExpired(true);
         } else {
             isExpired = false;
@@ -116,7 +120,7 @@ contract AirnodeEscrow is RrpRequester {
   }
 
   /// if buyer wishes to initiate dispute over seller breach of off chain agreement or repudiate, simply may wait for expiration without sending deposit nor calling this function
-  function readyToClose() external restricted returns(string memory){
+  function readyToClose() external restricted returns(string memory) {
          if (msg.sender == seller) {
             sellerApproved = true;
             return("Seller ready to close.");
@@ -154,22 +158,24 @@ contract AirnodeEscrow is RrpRequester {
   function fulfill(bytes32 requestId, bytes calldata data) external onlyAirnodeRrp {
       require(incomingFulfillments[requestId], "No Request");
       delete incomingFulfillments[requestId];
-      int256 decodedData = abi.decode(data, (int256));
-      fulfilledData[requestId] = decodedData;
+      int256 _decodedData = abi.decode(data, (int256));
+      fulfilledData[requestId] = _decodedData;
+      _closeDeal(_decodedData);
   }
     
   /// @notice checks if both buyer and seller are ready to close and expiration has not been met; if so, escrowAddress closes deal and pays seller; if not, deposit returned to buyer
-  /// @dev if properly closes, emits event with effective time of closing
-  ///TODO: require airnode input to paySeller()
-  function closeDeal() public returns(bool){
+  /// @dev if properly closes, emits event with effective time of closing. This function is private to prevent external submission of valid _decodedData to trigger closing.
+  /// @param _decodedData airnode response passed by fulfill()
+  function _closeDeal(int256 _decodedData) private returns(bool) {
       if (!sellerApproved || !buyerApproved) revert NotApproved();
+      if (_decodedData == 0) revert OracleConditionNotSatisfied(); //change this condition for applicable triggering data/params/range etc. from Airnode
       if (expiryTime <= block.timestamp) {
             isExpired = true;
-            returnDeposit();
+            _returnDeposit();
             emit DealExpired(true);
         } else {
             isClosed = true;
-            paySeller();
+            _paySeller();
             emit DealClosed(true, block.timestamp); // confirmation of deal closing and effective time upon payment to seller
         }
         return(isClosed);
