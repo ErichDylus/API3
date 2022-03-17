@@ -46,7 +46,6 @@ contract AirnodePredictionMarket is RrpRequester {
     }
   
   event Expired();
-  event DealClosed(bool isClosed, uint256 effectiveTime); //event provides exact blockstamp Unix time of closing and oracle information
   event PredictionOffer(uint256 predictId);
 
   error HasExpired();
@@ -119,7 +118,9 @@ contract AirnodePredictionMarket is RrpRequester {
             IERC20(prediction.token).transfer(prediction.partyA, prediction.amount);
             IERC20(prediction.token).transfer(prediction.partyB, prediction.amount);
         }
-        // call airnode here for outcome[] -- currently hardcoded for partyA to predict true outcome, partyB to predict false
+        // placeholder, call airnode here -- currently hardcoded for partyA to predict true outcome, partyB to predict false
+        // below is just an example boolean condition
+        // if (fulfilledData[requestId] > 0) { outcome[_predictionId] = true; } else {}
         if (outcome[_predictionId]) {
             IERC20(prediction.token).transfer(prediction.partyA, 2 * prediction.amount);
         } else if (!outcome[_predictionId]) {
@@ -152,10 +153,11 @@ contract AirnodePredictionMarket is RrpRequester {
   /// @dev the AirnodeRrp.sol protocol contract will callback here to fulfill the request
   /// @param requestId generated when making the request and passed here as a reference to identify which request the response is for
   /// @param data for a successful response, the requested data which has been encoded. Decode by the function decode() from the abi object
-  function fulfill(bytes32 requestId, bytes calldata data) external onlyAirnodeRrp {
+  function fulfill(bytes32 requestId, bytes calldata data) external onlyAirnodeRrp returns (int256) {
       require(incomingFulfillments[requestId], "No Request");
       delete incomingFulfillments[requestId];
       int256 _decodedData = abi.decode(data, (int256));
       fulfilledData[requestId] = _decodedData;
+      return(fulfilledData[requestId]);
   }
 }
