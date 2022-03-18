@@ -27,7 +27,7 @@ contract AirnodePredictionMarket is RrpRequester {
   mapping(bytes32 => int256) public fulfilledData;
   mapping(uint256 /* predictionId */ => bool) outcome;
   mapping(uint256 /* predictionId */ => Prediction) public predictionList;
-  mapping(uint256 /* predictionId */ => bytes32) airnodeRequest;
+  mapping(uint256 /* predictionId */ => bytes32 /* requestId */) airnodeRequest;
   //mapping(mapping(uint256 => bytes32) /* airnodeRequest */ => int256 /* _decodedData */) airnodeResponse;
 
   enum Status {
@@ -135,7 +135,7 @@ contract AirnodePredictionMarket is RrpRequester {
         predictionList[_predictionId].status = Status.Settled;
     }
   
-  /// @notice call the airnode which will provide a boolean response
+  /// @notice call the airnode, will need to manipulate the response to boolean in calling function
   /// @dev inbound API parameters which may already be ABI encoded. Source: https://docs.api3.org/airnode/v0.2/grp-developers/call-an-airnode.html
   /// @param _predictionId prediction offer number
   /// @param endpointId identifier for the specific endpoint desired to access via the airnode
