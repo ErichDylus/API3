@@ -8,7 +8,7 @@ pragma solidity >=0.8.9;
 
 /// IN PROCESS AND INCOMPLETE, unaudited and for demonstration only, subject to all disclosures, licenses, and caveats of the open-source-law repo
 /// @title Airnode Prediction Market
-/// Prediction market judged by an Airnode RRP call, loosely based on https://gist.github.com/0xfoobar/c7f620e62339b0e7d201cb64f5042eef
+/// Per-use case prediction market judged by an Airnode RRP call, loosely based on https://gist.github.com/0xfoobar/c7f620e62339b0e7d201cb64f5042eef
 /// TODO: support ETH/native gas tokens in addition to ERC20 tokens
 
 import "https://github.com/api3dao/airnode/blob/master/packages/airnode-protocol/contracts/rrp/requesters/RrpRequester.sol";
@@ -27,6 +27,8 @@ contract AirnodePredictionMarket is RrpRequester {
   mapping(bytes32 => int256) public fulfilledData;
   mapping(uint256 /* predictionId */ => bool) outcome;
   mapping(uint256 /* predictionId */ => Prediction) public predictionList;
+  mapping(uint256 /* predictionId */ => bytes32) airnodeRequest;
+  //mapping(mapping(uint256 => bytes32) /* airnodeRequest */ => int256 /* _decodedData */) airnodeResponse;
 
   enum Status {
         Offered,
@@ -110,7 +112,11 @@ contract AirnodePredictionMarket is RrpRequester {
 
     /// @dev if not returning a boolean response from airnode, parameters for outcome[] can be designated around fulfilledData[requestId]
     /// @param _predictionId prediction offer number
-    function settlePrediction(uint256 _predictionId) external {
+    /// @param _endpointId identifier for the specific endpoint desired to access via the airnode
+    /// @param _sponsor address of the entity that pays for the fulfillment of a request & gas costs the Airnode will incur. These costs will be withdrawn from the sponsorWallet of the Airnode when the requester calls it.
+    /// @param _sponsorWallet the wallet created via mnemonic by the sponsor with the Admin CLI, funds within used by the airnode to pay gas. See https://docs.api3.org/airnode/v0.2/grp-developers/requesters-sponsors.html#what-is-a-sponsor
+    /// @param _parameters specify the API and reserved parameters (see Airnode ABI specifications at https://docs.api3.org/airnode/v0.2/reference/specifications/airnode-abi-specifications.html for how these are encoded)
+    function settlePrediction(uint256 _predictionId, bytes32 _endpointId, address _sponsor, address _sponsorWallet, bytes calldata _parameters) external {
         Prediction memory prediction = predictionList[_predictionId];
         if (msg.sender != prediction.airnodeResolver) revert NotAirnodeResolver();
         if (prediction.status != Status.Accepted) revert NotAccepted();
@@ -118,9 +124,9 @@ contract AirnodePredictionMarket is RrpRequester {
             IERC20(prediction.token).transfer(prediction.partyA, prediction.amount);
             IERC20(prediction.token).transfer(prediction.partyB, prediction.amount);
         }
-        // placeholder, call airnode here -- currently hardcoded for partyA to predict true outcome, partyB to predict false
-        // below is just an example boolean condition
-        // if (fulfilledData[requestId] > 0) { outcome[_predictionId] = true; } else {}
+        // call airnode here -- currently hardcoded for partyA to predict boolean true outcome, partyB to predict false
+        _callAirnode(_predictionId, _endpointId, _sponsor, _sponsorWallet, _parameters);
+        if (fulfilledData[airnodeRequest[_predictionId]] > 0) { outcome[_predictionId] = true; } else {}
         if (outcome[_predictionId]) {
             IERC20(prediction.token).transfer(prediction.partyA, 2 * prediction.amount);
         } else if (!outcome[_predictionId]) {
@@ -136,7 +142,7 @@ contract AirnodePredictionMarket is RrpRequester {
   /// @param sponsor address of the entity that pays for the fulfillment of a request & gas costs the Airnode will incur. These costs will be withdrawn from the sponsorWallet of the Airnode when the requester calls it.
   /// @param sponsorWallet the wallet created via mnemonic by the sponsor with the Admin CLI, funds within used by the airnode to pay gas. See https://docs.api3.org/airnode/v0.2/grp-developers/requesters-sponsors.html#what-is-a-sponsor
   /// @param parameters specify the API and reserved parameters (see Airnode ABI specifications at https://docs.api3.org/airnode/v0.2/reference/specifications/airnode-abi-specifications.html for how these are encoded)
-  function callAirnode(uint256 _predictionId, bytes32 endpointId, address sponsor, address sponsorWallet, bytes calldata parameters) external {
+  function _callAirnode(uint256 _predictionId, bytes32 endpointId, address sponsor, address sponsorWallet, bytes calldata parameters) internal {
 	Prediction memory prediction = predictionList[_predictionId];      
 	bytes32 requestId = airnodeRrp.makeFullRequest( // Make the Airnode request
           prediction.airnodeResolver,                        
@@ -148,16 +154,16 @@ contract AirnodePredictionMarket is RrpRequester {
           parameters                      
           );
       incomingFulfillments[requestId] = true;
+      airnodeRequest[_predictionId] = requestId;
   }
 
   /// @dev the AirnodeRrp.sol protocol contract will callback here to fulfill the request
   /// @param requestId generated when making the request and passed here as a reference to identify which request the response is for
   /// @param data for a successful response, the requested data which has been encoded. Decode by the function decode() from the abi object
-  function fulfill(bytes32 requestId, bytes calldata data) external onlyAirnodeRrp returns (int256) {
+  function fulfill(bytes32 requestId, bytes calldata data) external onlyAirnodeRrp {
       require(incomingFulfillments[requestId], "No Request");
       delete incomingFulfillments[requestId];
       int256 _decodedData = abi.decode(data, (int256));
       fulfilledData[requestId] = _decodedData;
-      return(fulfilledData[requestId]);
   }
 }
