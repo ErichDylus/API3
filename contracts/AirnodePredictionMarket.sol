@@ -28,7 +28,7 @@ contract AirnodePredictionMarket is RrpRequester {
   mapping(uint256 /* predictionId */ => bool) outcome;
   mapping(uint256 /* predictionId */ => Prediction) public predictionList;
   mapping(uint256 /* predictionId */ => bytes32 /* requestId */) airnodeRequest;
-  mapping(mapping(uint256 => bytes32) /* airnodeRequest */ => int256 /* _decodedData */) airnodeResponse;
+  mapping(airnodeRequest => int256 /* _decodedData */) airnodeResponse;
 
   enum Status {
         Offered,
@@ -48,7 +48,10 @@ contract AirnodePredictionMarket is RrpRequester {
     }
   
   event Expired();
-  event PredictionOffer(uint256 predictId);
+  event PredictionAccepted(uint256 predictId);
+  event PredictionOffer(uint256 predictId, address partyB);
+  event PredictionSettled(uint256 predictId);
+  event PredictionWithdrawn(uint256 predictId);
 
   error HasExpired();
   error NotAccepted();
@@ -86,7 +89,7 @@ contract AirnodePredictionMarket is RrpRequester {
         });
 
         predictionList[nextPredictionId] = prediction;
-        emit PredictionOffer(nextPredictionId);
+        emit PredictionOffer(nextPredictionId, _partyB);
 	    unchecked { nextPredictionId += 1; } // will not overflow on human timelines
     }
 
@@ -99,6 +102,7 @@ contract AirnodePredictionMarket is RrpRequester {
         uint256 _amount = prediction.amount;
         delete predictionList[_predictionId];
         _token.transfer(msg.sender, _amount); // refund partyA
+        emit PredictionWithdrawn(_predictionId);
     }
 
     /// @param _predictionId prediction offer number
@@ -108,9 +112,10 @@ contract AirnodePredictionMarket is RrpRequester {
         if (prediction.status != Status.Offered) revert NotOffered();
         prediction.token.transferFrom(msg.sender, address(this), prediction.amount);
         predictionList[_predictionId].status = Status.Accepted;
+        emit PredictionAccepted(_predictionId);
     }
 
-    /// @dev if not returning a boolean response from airnode, parameters for outcome[] can be designated around fulfilledData[requestId]
+    /// @dev if not returning a boolean from airnode, parameters for outcome[] can be designated around fulfilledData[requestId]
     /// @param _predictionId prediction offer number
     /// @param _endpointId identifier for the specific endpoint desired to access via the airnode
     /// @param _sponsor address of the entity that pays for the fulfillment of a request & gas costs the Airnode will incur. These costs will be withdrawn from the sponsorWallet of the Airnode when the requester calls it.
@@ -124,16 +129,17 @@ contract AirnodePredictionMarket is RrpRequester {
             IERC20(prediction.token).transfer(prediction.partyA, prediction.amount);
             IERC20(prediction.token).transfer(prediction.partyB, prediction.amount);
         }
-        // call airnode here -- currently hardcoded for partyA to predict boolean true outcome, partyB to predict false
+        // call airnode here -- currently hardcoded for partyA to predict boolean true outcome of response > 0, partyB to predict false
         _callAirnode(_predictionId, _endpointId, _sponsor, _sponsorWallet, _parameters);
         airnodeResponse[_predictionId][requestId] = fulfilledData[requestId];
-        if (airnodeResponse[_predictionId][requestId] > 0) { outcome[_predictionId] = true; } else {}
+        if (airnodeResponse[_predictionId][requestId] > 0) { outcome[_predictionId] = true; } else { outcome[_predictionId] = false; }
         if (outcome[_predictionId]) {
             IERC20(prediction.token).transfer(prediction.partyA, 2 * prediction.amount);
         } else if (!outcome[_predictionId]) {
             IERC20(prediction.token).transfer(prediction.partyB, 2 * prediction.amount);
         }
         predictionList[_predictionId].status = Status.Settled;
+        emit PredictionSettled(_predictionId);
     }
   
   /// @notice call the airnode, will need to manipulate the response to boolean in calling function
