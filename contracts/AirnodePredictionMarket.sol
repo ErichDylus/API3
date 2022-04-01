@@ -28,7 +28,6 @@ contract AirnodePredictionMarket is RrpRequester {
   mapping(uint256 /* predictionId */ => bool) outcome;
   mapping(uint256 /* predictionId */ => Prediction) public predictionList;
   mapping(uint256 /* predictionId */ => bytes32 /* requestId */) airnodeRequest;
-  mapping(airnodeRequest => int256 /* _decodedData */) airnodeResponse;
 
   enum Status {
         Offered,
@@ -131,8 +130,8 @@ contract AirnodePredictionMarket is RrpRequester {
         }
         // call airnode here -- currently hardcoded for partyA to predict boolean true outcome of response > 0, partyB to predict false
         _callAirnode(_predictionId, _endpointId, _sponsor, _sponsorWallet, _parameters);
-        airnodeResponse[_predictionId][requestId] = fulfilledData[requestId];
-        if (airnodeResponse[_predictionId][requestId] > 0) { outcome[_predictionId] = true; } else { outcome[_predictionId] = false; }
+        bytes32 _requestId = airnodeRequest[_predictionId]; // in order to fetch the fulfilledData for this _predictionId to determine outcome
+        if (fulfilledData[_requestId] > 0) { outcome[_predictionId] = true; } else { outcome[_predictionId] = false; }
         if (outcome[_predictionId]) {
             IERC20(prediction.token).transfer(prediction.partyA, 2 * prediction.amount);
         } else if (!outcome[_predictionId]) {
