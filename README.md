@@ -15,6 +15,8 @@ Unless otherwise specified, my [autonomous attorney disclosure](https://github.c
   
 **Articles**
   
+ - [API3 Year 0 Wrapped: DAO and Legal Structure](https://medium.com/@erich.dylus/api3-year-0-wrapped-dao-and-legal-structure-37132af2776b)
+  
  - [Redefining Trust: Smart Escrow Contracts](https://medium.com/api3/redefining-trust-smart-escrow-contracts-975a8ee26703)
   
  - [Legal Contract Formation in Smart Contracts](https://lexdao.substack.com/p/legal-contract-formation-in-smart)
