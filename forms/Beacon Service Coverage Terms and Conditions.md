@@ -6,7 +6,7 @@ Each prospective claimant acknowledges that automated notifications may be sent 
 
 A valid submitted claim under Beacon Service Coverage (a “Claim”) by one having duly paid for a Beacon subscription and corresponding tier of service coverage via their public address on an applicable public blockchain (an applicable “Claimant”) must comply with the following:
 
-- A Claim must demonstrate a direct nexus between Claimant’s lawful paid usage of the applicable Beacon, the material malfunction of such Beacon, and the alleged permanent damages or losses to the Claimant caused by such malfunction. No Claim may be altered after submission.
+- A Claim must demonstrate a direct nexus between Claimant’s lawful paid usage of the applicable Beacon, the material malfunction of such Beacon, and the alleged permanent damages or losses to the Claimant caused by such malfunction. No Claim may be altered after submission; all supporting materials and evidence presented by Claimant must be pinned on IPFS and publicly available at the time of Claim submission and continuously until the later of: (i) duration of all Claim proceedings and (ii) the applicable service coverage policy term.
 
 - Only Beacon material malfunctions are covered under Beacon Service Coverage, which includes (in each case, where relevant to the covered Beacon and claimed damages): address whitelisting failures, lack of Beacon updates (when a Beacon response was appropriately due according to the applicable deviation threshold), material malfunction in Airnode software, and material malfunction or exploit in the applicable Airnode or Beacon protocol smart contracts. 
 
