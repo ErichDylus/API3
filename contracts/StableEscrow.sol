@@ -1,6 +1,6 @@
 //SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.9;
+pragma solidity >=0.8.9;
 
 /// unaudited and for demonstration only, provided without warranty of any kind, subject to all disclosures, licenses, and caveats of this repo
 /// building at ETHDenver using API3 Beacons powered by Amberdata
@@ -71,7 +71,7 @@ contract StableEscrow {
       ierc20 = IERC20(_stablecoin);
       ibeacon = IRrpBeaconServer(_beaconRrp);
       iBeaconWhitelister = ISelfServeRrpBeaconServerWhitelister(_selfServeBeaconWhitelister);
-      iBeaconWhitelister.whitelistReader(DAIbeaconID, escrowAddress);
+      //iBeaconWhitelister.whitelistReader(DAIbeaconID, escrowAddress);
       description = _description;
       seller = _seller;
       parties[msg.sender] = true;
@@ -90,7 +90,7 @@ contract StableEscrow {
   
   /// ********* DEPLOYER MUST SEPARATELY APPROVE (by directly interacting with the _stablecoin address's approve() function) escrowAddress for the deposit amount (keep decimals in mind) ********
   /// @notice buyer deposits in escrowAddress after separately ERC20-approving escrowAddress
-  function depositInEscrow() public restricted returns(bool, uint256) {
+  function depositInEscrow() external restricted returns(bool, uint256) {
       if (msg.sender != buyer) revert OnlyBuyer();
       ierc20.transferFrom(buyer, escrowAddress, deposit);
       return (true, ierc20.balanceOf(escrowAddress));
@@ -135,12 +135,11 @@ contract StableEscrow {
     
   /// @notice checks if parties are ready to close, if price of DAI is not >3% off $1 peg, and if not expired; if so, escrowAddress closes deal and pays seller; if not, deposit returned to buyer
   /// @dev if properly closes, emits event with effective time of closing
-  function closeDeal() public returns(bool, int224) {
+  function closeDeal() external returns(bool, int224) {
         if (!sellerApproved || !buyerApproved) revert NotApproved();
         (int224 _value, uint32 _timestamp) = ibeacon.readBeacon(DAIbeaconID); // hardcoded DAI for testing, could have selection between DAI/USDC/USDT Beacon IDs in future versions
         if (_value < 970000 || _value > 1030000) /* if the DAI price is +- 3% off $1 peg */ {
             _returnDeposit(); // alternatively, could merely alert the parties the stablecoin is off peg, but seller would likely prefer deposit is returned & another token or mechanism used if the peg is lost
-            isClosed = false;
             emit UnstableCoin(_value, _timestamp);
         }
         else if (expiryTime <= uint256(block.timestamp)) {
