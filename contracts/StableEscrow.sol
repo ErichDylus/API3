@@ -1,6 +1,6 @@
 //SPDX-License-Identifier: MIT
 
-pragma solidity >=0.8.9;
+pragma solidity >=0.8.10;
 
 /// unaudited and for demonstration only, provided without warranty of any kind, subject to all disclosures, licenses, and caveats of this repo
 /// building at ETHDenver using API3 Beacons powered by Amberdata
@@ -34,9 +34,9 @@ contract StableEscrow {
   bool buyerApproved;
   bool isExpired;
   bool isClosed;
-  IERC20 public ierc20;
-  IRrpBeaconServer public ibeacon;
-  ISelfServeRrpBeaconServerWhitelister public iBeaconWhitelister;
+  IERC20 ierc20;
+  IRrpBeaconServer ibeacon;
+  ISelfServeRrpBeaconServerWhitelister iBeaconWhitelister;
   string description;
   mapping(address => bool) public parties; //map whether an address is a party to the transaction for restricted() modifier 
   
@@ -65,13 +65,13 @@ contract StableEscrow {
   // Ropsten SelfServeRrpBeaconServerWhitelister: 0x7432106a4367e6FfA52c75Cd3535b207C09dd34b
   constructor(string memory _description, uint256 _deposit, uint256 _secsUntilExpiry, address _seller, address _stablecoin, address _beaconRrp, address _selfServeBeaconWhitelister) {
       if (_seller == msg.sender) revert BuyerAddress();
-      buyer = address(msg.sender);
+      buyer = msg.sender;
       deposit = _deposit;
       escrowAddress = address(this);
       ierc20 = IERC20(_stablecoin);
       ibeacon = IRrpBeaconServer(_beaconRrp);
       iBeaconWhitelister = ISelfServeRrpBeaconServerWhitelister(_selfServeBeaconWhitelister);
-      //iBeaconWhitelister.whitelistReader(DAIbeaconID, escrowAddress);
+      iBeaconWhitelister.whitelistReader(DAIbeaconID, escrowAddress);
       description = _description;
       seller = _seller;
       parties[msg.sender] = true;
@@ -88,9 +88,8 @@ contract StableEscrow {
       seller = _seller;
   }
   
-  /// ********* DEPLOYER MUST SEPARATELY APPROVE (by directly interacting with the _stablecoin address's approve() function) escrowAddress for the deposit amount (keep decimals in mind) ********
-  /// @notice buyer deposits in escrowAddress after separately ERC20-approving escrowAddress
-  function depositInEscrow() external restricted returns(bool, uint256) {
+  /// @notice buyer deposits in escrowAddress ****** after separately ERC20-approving escrowAddress ****** by calling this function OR simply directly transfers the deposit to escrowAddress
+  function depositInEscrow() external returns(bool, uint256) {
       if (msg.sender != buyer) revert OnlyBuyer();
       ierc20.transferFrom(buyer, escrowAddress, deposit);
       return (true, ierc20.balanceOf(escrowAddress));
@@ -119,8 +118,8 @@ contract StableEscrow {
         return(isExpired);
     }
     
-  /// @notice for seller to check if deposit is in escrowAddress
-  function checkEscrow() external restricted view returns(uint256) {
+  /// @notice to check if deposit is in escrowAddress
+  function checkEscrow() external view returns(uint256) {
       return ierc20.balanceOf(escrowAddress);
   }
 
