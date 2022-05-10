@@ -1,8 +1,12 @@
 //SPDX-License-Identifier: MIT
 /**** 
-***** this code and any deployments of this code are strictly provided as-is; no guarantee, representation or warranty is being made, express or implied, as to the safety or correctness of the code 
-***** or any smart contracts or other software deployed from these files, in accordance with the disclosures and licenses found here: https://github.com/ErichDylus/API3/blob/main/contracts/README.md
-***** this code is not audited, and users, developers, or adapters of these files should proceed with caution and use at their own risk.
+***** this code and any deployments of this code are strictly provided as-is; 
+***** no guarantee, representation or warranty is being made, express or implied, 
+***** as to the safety or correctness of the code 
+***** or any smart contracts or other software deployed from these files, 
+***** in accordance with the disclosures and licenses found in the README of this repo.
+***** this code is not audited, and users, developers, or adapters of these files 
+***** should proceed with caution and use at their own risk.
 ****/
 
 pragma solidity >=0.8.4;
@@ -11,7 +15,14 @@ pragma solidity >=0.8.4;
 /// @notice uses Sushiswap router to swap incoming ETH for USDC tokens, then sends to the secondary API3 treasury
 
 interface IUniswapV2Router02 {
-    function swapExactETHForTokens(uint256 amountOutMin, address[] calldata path, address to, uint256 deadline) external payable returns (uint256[] memory amounts);
+
+    function swapExactETHForTokens(
+        uint256 amountOutMin, 
+        address[] calldata path, 
+        address to, 
+        uint256 deadline
+    ) external payable returns (uint256[] memory amounts);
+    
 }
 
 contract SwaptoUSDCandSendtoAPI3Treasury {
