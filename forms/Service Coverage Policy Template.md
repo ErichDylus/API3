@@ -16,7 +16,7 @@ Claimant Address:
 
 Beneficiary Address:
 
-Whitelist (Requester) Address:
+Smart Contract (Requester) Address (to allow read access):
  
 Service Coverage Amount:
 
