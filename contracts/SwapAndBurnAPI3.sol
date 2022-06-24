@@ -10,17 +10,25 @@
 pragma solidity >=0.8.4;
 
 /// @title Swap and Burn API3
-/// @notice uses Sushiswap router to swap USDC or ETH for API3 tokens, then burns the API3 tokens via the token contract
-/// simple programmatic token burn per API3 whitepaper
+/** @notice simple programmatic token burn per API3 whitepaper: uses Sushiswap router to swap USDC or ETH for API3 tokens,
+*** LPs half, then burns all remaining API3 tokens via the token contract */
 
 interface IUniswapV2Router02 {
-    function swapExactTokensForTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
+    function addLiquidityETH(
+        address token,
+        uint256 amountTokenDesired,
+        uint256 amountTokenMin,
+        uint256 amountETHMin,
         address to,
         uint256 deadline
-    ) external returns (uint256[] memory amounts);
+    )
+        external
+        payable
+        returns (
+            uint256 amountToken,
+            uint256 amountETH,
+            uint256 liquidity
+        );
 
     function swapExactETHForTokens(
         uint256 amountOutMin,
@@ -28,30 +36,38 @@ interface IUniswapV2Router02 {
         address to,
         uint256 deadline
     ) external payable returns (uint256[] memory amounts);
+
+    function swapExactTokensForETH(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
+
+    function swapExactTokensForTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
 }
 
 interface IAPI3 {
+    function approve(address spender, uint256 amount) external returns (bool);
+    
     function balanceOf(address account) external view returns (uint256);
 
-    function updateBurnerStatus(bool burnerStatus) external;
-
     function burn(uint256 amount) external;
+
+    function updateBurnerStatus(bool burnerStatus) external;
 }
 
 interface IUSDC {
     function approve(address spender, uint256 amount) external returns (bool);
 
     function balanceOf(address account) external view returns (uint256);
-
-    function transfer(address recipient, uint256 amount)
-        external
-        returns (bool);
-
-    function transferFrom(
-        address from,
-        address to,
-        uint256 value
-    ) external returns (bool);
 }
 
 contract SwapAndBurnAPI3 {
@@ -76,17 +92,36 @@ contract SwapAndBurnAPI3 {
         iAPI3Token = IAPI3(API3_TOKEN_ADDR);
         iAPI3Token.updateBurnerStatus(true);
         iUSDCToken = IUSDC(USDC_TOKEN_ADDR);
+        iAPI3Token.approve(SUSHI_ROUTER_ADDR, type(uint256).max);
         iUSDCToken.approve(SUSHI_ROUTER_ADDR, type(uint256).max);
     }
 
-    /// @notice swaps any USDC held by address(this) for API3, and calls the internal _burnAPI3() function
-    /// @dev amountOutMin is set to 1 to prevent successful call if the router is empty. Callable by anyone.
-    function swapUSDCToAPI3AndBurn() external {
+    /// @notice swaps half of USDC held by address(this) for ETH and API3 to LP, swaps the other half for API3, and calls the internal _burnAPI3() function
+    /// @dev amountOutMin is set to 1 to prevent successful call if the router is empty. LP has 10% buffer. Callable by anyone.
+    function swapUSDCToAPI3AndLPAndBurn() external {
         if (iUSDCToken.balanceOf(address(this)) == 0) revert NoUSDCTokens();
+        uint256 usdcBal = iUSDCToken.balanceOf(address(this));
+        uint256 lpShare = usdcBal / 4;
+        uint256 api3Share = usdcBal - lpShare;
+        sushiRouter.swapExactTokensForETH(
+            lpShare,
+            1,
+            _getPathForUSDCtoETH(),
+            address(this),
+            block.timestamp
+        );
         sushiRouter.swapExactTokensForTokens(
-            iUSDCToken.balanceOf(address(this)),
+            api3Share,
             1,
             _getPathForUSDCtoAPI3(),
+            address(this),
+            block.timestamp
+        );
+        sushiRouter.addLiquidityETH(
+            API3_TOKEN_ADDR,
+            lpShare,
+            (lpShare * 9) / 10,
+            (address(this).balance * 9) / 10,
             address(this),
             block.timestamp
         );
@@ -122,6 +157,14 @@ contract SwapAndBurnAPI3 {
         address[] memory path = new address[](2);
         path[0] = USDC_TOKEN_ADDR;
         path[1] = API3_TOKEN_ADDR;
+        return path;
+    }
+
+    /// @return path the router path for USDC/ETH swap
+    function _getPathForUSDCtoETH() internal pure returns (address[] memory) {
+        address[] memory path = new address[](2);
+        path[0] = USDC_TOKEN_ADDR;
+        path[1] = WETH_ADDR;
         return path;
     }
 }
