@@ -10,8 +10,9 @@
 pragma solidity >=0.8.4;
 
 /// @title Swap and Burn API3
-/** @notice simple programmatic token burn per API3 whitepaper: uses Sushiswap router to swap USDC or ETH for API3 tokens,
-*** LPs half, then burns all remaining API3 tokens via the token contract */
+/** @notice simple programmatic token burn per API3 whitepaper: uses Sushiswap router to swap USDC held by this contract for API3 tokens,
+ *** LPs half (non-withdrawable, one-way), then burns all remaining API3 tokens via the token contract;
+ *** also auto-swaps any ETH sent directly to this contract for API3 tokens, which are then burned via the token contract */
 
 interface IUniswapV2Router02 {
     function addLiquidityETH(
@@ -56,7 +57,7 @@ interface IUniswapV2Router02 {
 
 interface IAPI3 {
     function approve(address spender, uint256 amount) external returns (bool);
-    
+
     function balanceOf(address account) external view returns (uint256);
 
     function burn(uint256 amount) external;
@@ -86,6 +87,8 @@ contract SwapAndBurnAPI3 {
 
     error NoAPI3Tokens();
     error NoUSDCTokens();
+
+    event API3Burned(uint256 amountBurned);
 
     constructor() payable {
         sushiRouter = IUniswapV2Router02(SUSHI_ROUTER_ADDR);
@@ -117,7 +120,7 @@ contract SwapAndBurnAPI3 {
             address(this),
             block.timestamp
         );
-        sushiRouter.addLiquidityETH(
+        sushiRouter.addLiquidityETH{value: address(this).balance}(
             API3_TOKEN_ADDR,
             lpShare,
             (lpShare * 9) / 10,
@@ -140,8 +143,10 @@ contract SwapAndBurnAPI3 {
     }
 
     function _burnAPI3() internal {
-        if (iAPI3Token.balanceOf(address(this)) == 0) revert NoAPI3Tokens();
-        iAPI3Token.burn(iAPI3Token.balanceOf(address(this)));
+        uint256 api3Bal = iAPI3Token.balanceOf(address(this));
+        if (api3Bal == 0) revert NoAPI3Tokens();
+        iAPI3Token.burn(api3Bal);
+        emit API3Burned(api3Bal);
     }
 
     /// @return path the router path for ETH/API3 swap
