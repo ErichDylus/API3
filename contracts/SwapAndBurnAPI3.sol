@@ -1,18 +1,18 @@
 //SPDX-License-Identifier: MIT
 /****
- ***** this code and any deployments of this code are strictly provided as-is;
- ***** no guarantee, representation or warranty is being made, express or implied, as to the safety or correctness of the code
- ***** or any smart contracts or other software deployed from these files,
- ***** in accordance with the disclosures and licenses found here: https://github.com/ErichDylus/API3/blob/main/contracts/README.md
- ***** this code is not audited, and users, developers, or adapters of these files should proceed with caution and use at their own risk.
- ****/
+***** this code and any deployments of this code are strictly provided as-is;
+***** no guarantee, representation or warranty is being made, express or implied, as to the safety or correctness of the code
+***** or any smart contracts or other software deployed from these files,
+***** in accordance with the disclosures and licenses found here: https://github.com/ErichDylus/API3/blob/main/contracts/README.md
+***** this code is not audited, and users, developers, or adapters of these files should proceed with caution and use at their own risk.
+****/
 
 pragma solidity >=0.8.4;
 
 /// @title Swap and Burn API3
 /** @notice simple programmatic token burn per API3 whitepaper: uses Sushiswap router to swap USDC held by this contract for API3 tokens,
- *** LPs half (non-withdrawable, one-way), then burns all remaining API3 tokens via the token contract;
- *** also auto-swaps any ETH sent directly to this contract for API3 tokens, which are then burned via the token contract */
+*** LPs half (non-withdrawable, one-way), then burns all remaining API3 tokens via the token contract;
+*** also auto-swaps any ETH sent directly to this contract for API3 tokens, which are then burned via the token contract */
 
 interface IUniswapV2Router02 {
     function addLiquidityETH(
@@ -89,6 +89,7 @@ contract SwapAndBurnAPI3 {
     error NoUSDCTokens();
 
     event API3Burned(uint256 amountBurned);
+    event LiquidityProvided(uint256 liquidityAdded);
 
     constructor() payable {
         sushiRouter = IUniswapV2Router02(SUSHI_ROUTER_ADDR);
@@ -120,7 +121,9 @@ contract SwapAndBurnAPI3 {
             address(this),
             block.timestamp
         );
-        sushiRouter.addLiquidityETH{value: address(this).balance}(
+        (, , uint256 liquidity) = sushiRouter.addLiquidityETH{
+            value: address(this).balance
+        }(
             API3_TOKEN_ADDR,
             lpShare,
             (lpShare * 9) / 10,
@@ -128,6 +131,7 @@ contract SwapAndBurnAPI3 {
             address(this),
             block.timestamp
         );
+        emit LiquidityProvided(liquidity);
         _burnAPI3();
     }
 
