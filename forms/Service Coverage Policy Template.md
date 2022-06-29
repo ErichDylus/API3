@@ -18,11 +18,11 @@ Beneficiary Address:
 
 Smart Contract (Requester) Address (to allow read access):
  
-Service Coverage Amount:
+Service Coverage Amount (US Dollar value):
 
-  Coverage Start Time (Unix timestamp, UTC time):
+&nbsp;&nbsp;&nbsp;&nbsp;Coverage Start Time (Unix timestamp, UTC time):
   
-  Coverage Expiry Time (Unix timestamp, UTC time):
+&nbsp;&nbsp;&nbsp;&nbsp;Coverage Expiry Time (Unix timestamp, UTC time):
  
 Service Coverage Terms and Conditions:
 
