@@ -3,7 +3,7 @@
 
 ************** IN PROCESS, INCOMPLETE, DO NOT USE ************************
 
- ***** TODO: account for (0,0) latitude/longitude
+ ***** 
  ***** this code and any deployments of this code are strictly provided as-is; 
  ***** no guarantee, representation or warranty is being made, express or implied, 
  ***** as to the safety or correctness of the code
@@ -20,6 +20,7 @@ pragma solidity >=0.8.9;
  ** contingent on Airnode location response (either by radius or within jxn) */
 /** @dev buyer should deploy (as they will separately approve() the contract address for the deposited funds,
  ** and deposit is returned to deployer if expired); note https://docs.api3.org/airnode/v0.2/grp-developers/requesters-sponsors.html */
+/// will respond
 
 import "https://github.com/api3dao/airnode/blob/master/packages/airnode-protocol/contracts/rrp/requesters/RrpRequesterV0.sol";
 
@@ -44,15 +45,15 @@ interface IERC20 {
 contract LocationEscrow is RrpRequesterV0 {
     address public buyer;
     address public seller;
-    int256 public closingTargetLatitude;
-    int256 public closingTargetLongitude;
-    uint256 public deposit;
+    int256 public immutable closingTargetLatitude;
+    int256 public immutable closingTargetLongitude;
+    uint256 public immutable deposit;
     uint256 public immutable expiryTime;
-    uint256 public radius;
+    uint256 public immutable radius;
     bool isExpired;
     bool isClosed;
     IERC20 public ierc20;
-    string description;
+    string immutable description;
     mapping(address => bool) public parties; //map whether an address is a party to the transaction for restricted() modifier
     mapping(bytes32 => bool) public incomingFulfillments;
     mapping(bytes32 => int256) public latitude;
@@ -67,6 +68,7 @@ contract LocationEscrow is RrpRequesterV0 {
     ); //event provides exact blockstamp Unix time of closing and oracle information
 
     error BuyerAddress();
+    error DealAlreadyClosed();
     error Expired(uint256 time);
     error FundsNotInEscrow();
     error OnlyBuyer();
@@ -151,11 +153,11 @@ contract LocationEscrow is RrpRequesterV0 {
     /// @dev inbound API parameters which may already be ABI encoded. Source: https://docs.api3.org/airnode/v0.2/grp-developers/call-an-airnode.html
     /// @param sponsorWallet: the wallet created via mnemonic by the sponsor with the Admin CLI, funds within used by the airnode to pay gas. See https://docs.api3.org/airnode/v0.2/grp-developers/requesters-sponsors.html#what-is-a-sponsor
     /// @param parameters: specify the API and reserved parameters (see Airnode ABI specifications at https://docs.api3.org/airnode/v0.2/reference/specifications/airnode-abi-specifications.html for how these are encoded)
-    /// @return requestId: so parties may later verify assetLatitude and assetLongitude mappings
     function requestLocation(bytes32 endpointId, bytes calldata parameters)
         external
-        returns (bytes32)
     {
+        if (isClosed) revert DealAlreadyClosed();
+        if (isExpired) revert Expired(block.timestamp);
         if (ierc20.balanceOf(address(this)) < deposit)
             revert FundsNotInEscrow();
         bytes32 requestId = airnodeRrp.makeFullRequest(
@@ -168,10 +170,9 @@ contract LocationEscrow is RrpRequesterV0 {
             parameters
         );
         incomingFulfillments[requestId] = true;
-        return (requestId);
     }
 
-    /// @dev the AirnodeRrp.sol protocol contract will callback here to fulfill the request
+    /// @dev the AirnodeRrp.sol protocol contract will callback here to fulfill the request of latitude & longitude
     /// @notice incoming fulfillment from RRP protocol contract, which will feed the decoded data to _closeDeal()
     /// @param requestId: generated when making the request and passed here as a reference to identify which request the response is for
     /// @param data: for a successful response, the requested data which has been encoded. Decode by the function decode() from the abi object
@@ -220,19 +221,18 @@ contract LocationEscrow is RrpRequesterV0 {
         private
         returns (bool)
     {
-        if (_latitude < closingTargetLatitude - radius)
-            revert OracleConditionNotSatisfied();
-        if (_latitude > closingTargetLatitude + radius)
-            revert OracleConditionNotSatisfied();
-        if (_longitude < closingTargetLongitude - radius)
-            revert OracleConditionNotSatisfied();
-        if (_longitude > closingTargetLongitude + radius)
-            revert OracleConditionNotSatisfied();
         if (expiryTime <= block.timestamp) {
             isExpired = true;
             _returnDeposit();
             emit DealExpired(true);
-        } else {
+        }
+        if (
+            _latitude < closingTargetLatitude - radius ||
+            _latitude > closingTargetLatitude + radius ||
+            _longitude < closingTargetLongitude - radius ||
+            _longitude > closingTargetLongitude + radius
+        ) revert OracleConditionNotSatisfied();
+        else {
             isClosed = true;
             _paySeller();
             emit DealClosed(true, block.timestamp, _latitude, _longitude); // confirmation of deal closing and effective time upon payment to seller
