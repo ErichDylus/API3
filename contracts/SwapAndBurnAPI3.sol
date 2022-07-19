@@ -11,8 +11,8 @@ pragma solidity >=0.8.4;
 
 /// @title Swap and Burn API3
 /** @notice simple programmatic token burn per API3 whitepaper: uses Sushiswap router to swap USDC held by this contract for API3 tokens,
-*** LPs half (non-withdrawable, one-way), then burns all remaining API3 tokens via the token contract;
-*** also auto-swaps any ETH sent directly to this contract for API3 tokens, which are then burned via the token contract */
+ *** LPs half (redeemable to this contract after one year), then burns all remaining API3 tokens via the token contract;
+ *** also auto-swaps any ETH sent directly to this contract for API3 tokens, which are then burned via the token contract */
 
 interface IUniswapV2Router02 {
     function addLiquidityETH(
@@ -30,6 +30,15 @@ interface IUniswapV2Router02 {
             uint256 amountETH,
             uint256 liquidity
         );
+
+    function removeLiquidityETH(
+        address token,
+        uint256 liquidity,
+        uint256 amountTokenMin,
+        uint256 amountETHMin,
+        address to,
+        uint256 deadline
+    ) external returns (uint256 amountToken, uint256 amountETH);
 
     function swapExactETHForTokens(
         uint256 amountOutMin,
@@ -74,6 +83,11 @@ interface IERC20 {
 }
 
 contract SwapAndBurnAPI3 {
+    struct Liquidity {
+        uint32 withdrawTime;
+        uint224 amount;
+    }
+
     address public constant API3_TOKEN_ADDR =
         0x0b38210ea11411557c13457D4dA7dC6ea731B88a;
     address public constant LP_TOKEN_ADDR =
@@ -85,16 +99,19 @@ contract SwapAndBurnAPI3 {
     address public constant WETH_ADDR =
         0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
-    IUniswapV2Router02 public sushiRouter;
-    IAPI3 public iAPI3Token;
-    IERC20 public iUSDCToken;
-    IERC20 public iLPToken;
+    IUniswapV2Router02 immutable sushiRouter;
+    IAPI3 immutable iAPI3Token;
+    IERC20 immutable iUSDCToken;
+    IERC20 immutable iLPToken;
+    Liquidity[] public liquidityAdds;
 
     error NoAPI3Tokens();
+    error NoRedeemableLPTokens();
     error NoUSDCTokens();
 
     event API3Burned(uint256 amountBurned);
     event LiquidityProvided(uint256 liquidityAdded);
+    event LiquidityRemoved(uint256 liquidityRemoved);
 
     constructor() payable {
         sushiRouter = IUniswapV2Router02(SUSHI_ROUTER_ADDR);
@@ -104,6 +121,7 @@ contract SwapAndBurnAPI3 {
         iAPI3Token.updateBurnerStatus(true);
         iAPI3Token.approve(SUSHI_ROUTER_ADDR, type(uint256).max);
         iUSDCToken.approve(SUSHI_ROUTER_ADDR, type(uint256).max);
+        iLPToken.approve(SUSHI_ROUTER_ADDR, type(uint256).max);
     }
 
     /// @notice receives ETH sent to address(this), swaps for API3, and calls the internal _burnAPI3() function
@@ -116,9 +134,11 @@ contract SwapAndBurnAPI3 {
         );
         _burnAPI3();
     }
-    
+
     /// @notice swaps half of USDC held by address(this) for ETH and API3 to LP, swaps the other half for API3, and calls the internal _burnAPI3() function
-    /// @dev amountOutMin is set to 1 to prevent successful call if the router is empty. LP has 10% buffer, and LP tokens sent to zero address to prevent withdrawal. Callable by anyone.
+    /** @dev amountOutMin is set to 1 to prevent successful call if the router is empty. LP has 10% buffer.
+     ** To implement one-way liquidity, delete redeemLP() function and insert "iLPToken.transfer(address(0), iLPToken.balanceOf(address(this)));" before _burnAPI3() here.
+     ** Callable by anyone. */
     function swapUSDCToAPI3AndLPAndBurn() external {
         uint256 usdcBal = iUSDCToken.balanceOf(address(this));
         if (usdcBal == 0) revert NoUSDCTokens();
@@ -149,8 +169,41 @@ contract SwapAndBurnAPI3 {
             block.timestamp
         );
         emit LiquidityProvided(liquidity);
-        iLPToken.transfer(address(0), iLPToken.balanceOf(address(this)));
+        liquidityAdds.push(
+            Liquidity(uint32(block.timestamp + 31557600), uint224(liquidity))
+        );
         _burnAPI3();
+    }
+
+    /** @dev checks earliest Liquidity struct to see if any LP tokens are redeemable,
+     ** then redeems that amount of liquidity to this address (which is entirely burned in API3, either by receive() or _burnAPI3()),
+     ** then deletes that struct in liquidityAdds[] and shifts the remainings structs accordingly */
+    function redeemLP() external {
+        Liquidity storage liquidity = liquidityAdds[0];
+        if (liquidity.withdrawTime > uint32(block.timestamp))
+            revert NoRedeemableLPTokens();
+        uint256 _redeemableLpTokens = uint256(liquidity.amount);
+        if (_redeemableLpTokens == 0) revert NoRedeemableLPTokens();
+        (uint256 _amountAPI3, uint256 _amountETH) = sushiRouter
+            .removeLiquidityETH(
+                LP_TOKEN_ADDR,
+                _redeemableLpTokens,
+                1,
+                1,
+                address(this),
+                block.timestamp
+            );
+        delete liquidityAdds[0];
+        // delete redeemed liquidity and shift array by one
+        for (uint256 i = 0; i < liquidityAdds.length - 1; ) {
+            liquidityAdds[i] = liquidityAdds[i + 1];
+            unchecked {
+                ++i;
+            }
+        }
+        liquidityAdds.pop();
+        _burnAPI3();
+        emit LiquidityRemoved(_redeemableLpTokens);
     }
 
     function _burnAPI3() internal {
@@ -160,7 +213,7 @@ contract SwapAndBurnAPI3 {
         emit API3Burned(api3Bal);
     }
 
-    /// @return path the router path for ETH/API3 swap
+    /// @return path: the router path for ETH/API3 swap
     function _getPathForETHtoAPI3() internal pure returns (address[] memory) {
         address[] memory path = new address[](2);
         path[0] = WETH_ADDR;
@@ -168,7 +221,7 @@ contract SwapAndBurnAPI3 {
         return path;
     }
 
-    /// @return path the router path for USDC/API3 swap
+    /// @return path: the router path for USDC/API3 swap
     function _getPathForUSDCtoAPI3() internal pure returns (address[] memory) {
         address[] memory path = new address[](2);
         path[0] = USDC_TOKEN_ADDR;
@@ -176,7 +229,7 @@ contract SwapAndBurnAPI3 {
         return path;
     }
 
-    /// @return path the router path for USDC/ETH swap
+    /// @return path: the router path for USDC/ETH swap
     function _getPathForUSDCtoETH() internal pure returns (address[] memory) {
         address[] memory path = new address[](2);
         path[0] = USDC_TOKEN_ADDR;
