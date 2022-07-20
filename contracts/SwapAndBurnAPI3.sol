@@ -99,11 +99,14 @@ contract SwapAndBurnAPI3 {
     address public constant WETH_ADDR =
         0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
-    IUniswapV2Router02 immutable sushiRouter;
-    IAPI3 immutable iAPI3Token;
-    IERC20 immutable iUSDCToken;
-    IERC20 immutable iLPToken;
-    Liquidity[] public liquidityAdds;
+    IUniswapV2Router02 public sushiRouter;
+    IAPI3 public iAPI3Token;
+    IERC20 public iUSDCToken;
+    IERC20 public iLPToken;
+
+    uint256 lpAddIndex;
+    uint256 lpRedeemIndex;
+    mapping(uint256 => Liquidity) public liquidityAdds;
 
     error NoAPI3Tokens();
     error NoRedeemableLPTokens();
@@ -136,7 +139,7 @@ contract SwapAndBurnAPI3 {
     }
 
     /// @notice swaps half of USDC held by address(this) for ETH and API3 to LP, swaps the other half for API3, and calls the internal _burnAPI3() function
-    /** @dev amountOutMin is set to 1 to prevent successful call if the router is empty. LP has 10% buffer.
+    /** @dev amountOutMin is set to 1 to prevent successful call if the router is empty. LP has 10% buffer. Liquidity locked for a year.
      ** To implement one-way liquidity, delete redeemLP() function and insert "iLPToken.transfer(address(0), iLPToken.balanceOf(address(this)));" before _burnAPI3() here.
      ** Callable by anyone. */
     function swapUSDCToAPI3AndLPAndBurn() external {
@@ -169,23 +172,33 @@ contract SwapAndBurnAPI3 {
             block.timestamp
         );
         emit LiquidityProvided(liquidity);
-        liquidityAdds.push(
-            Liquidity(uint32(block.timestamp + 31557600), uint224(liquidity))
+        liquidityAdds[lpAddIndex] = Liquidity(
+            uint32(block.timestamp + 31557600),
+            uint224(liquidity)
         );
+        unchecked {
+            ++lpAddIndex;
+        }
         _burnAPI3();
     }
 
     /** @dev checks earliest Liquidity struct to see if any LP tokens are redeemable,
      ** then redeems that amount of liquidity to this address (which is entirely burned in API3, either by receive() or _burnAPI3()),
-     ** then deletes that struct in liquidityAdds[] and shifts the remainings structs accordingly */
-    function redeemLP() external {
-        Liquidity storage liquidity = liquidityAdds[0];
+     ** then deletes that mapped struct in liquidityAdds[] and increments the lpRedeemIndex */
+    /// @notice redeems the earliest available liquidity; redeemed API3 is burned via _burnAPI3 and redeemed ETH is burned in API3 via receive()
+    /// @return _redeemableLpTokens: the amount of redeemed liquidity
+    function redeemLP() external returns (uint256) {
+        Liquidity memory liquidity = liquidityAdds[lpRedeemIndex];
         if (liquidity.withdrawTime > uint32(block.timestamp))
             revert NoRedeemableLPTokens();
         uint256 _redeemableLpTokens = uint256(liquidity.amount);
-        if (_redeemableLpTokens == 0) revert NoRedeemableLPTokens();
-        (uint256 _amountAPI3, uint256 _amountETH) = sushiRouter
-            .removeLiquidityETH(
+        if (_redeemableLpTokens == 0) {
+            delete liquidityAdds[lpRedeemIndex];
+            unchecked {
+                ++lpRedeemIndex;
+            }
+        } else {
+            sushiRouter.removeLiquidityETH(
                 LP_TOKEN_ADDR,
                 _redeemableLpTokens,
                 1,
@@ -193,17 +206,46 @@ contract SwapAndBurnAPI3 {
                 address(this),
                 block.timestamp
             );
-        delete liquidityAdds[0];
-        // delete redeemed liquidity and shift array by one
-        for (uint256 i = 0; i < liquidityAdds.length - 1; ) {
-            liquidityAdds[i] = liquidityAdds[i + 1];
+            delete liquidityAdds[lpRedeemIndex];
             unchecked {
-                ++i;
+                ++lpRedeemIndex;
             }
+            _burnAPI3();
+            emit LiquidityRemoved(_redeemableLpTokens);
         }
-        liquidityAdds.pop();
-        _burnAPI3();
-        emit LiquidityRemoved(_redeemableLpTokens);
+        return (_redeemableLpTokens);
+    }
+
+    /** @dev checks applicable Liquidity struct to see if any LP tokens are redeemable,
+     ** then redeems that amount of liquidity to this address (which is entirely burned in API3, either by receive() or _burnAPI3()),
+     ** then deletes that mapped struct in liquidityAdds[]. Implemented in case of lpAddIndex--lpRedeemIndex mismatch */
+    /// @notice redeems specifically indexed liquidity; redeemed API3 is burned via _burnAPI3 and redeemed ETH is burned in API3 via receive()
+    /// @param _lpRedeemIndex: index of liquidity in liquidityAdds[] mapping to be redeemed
+    /// @return _redeemableLpTokens: the amount of redeemed liquidity
+    function redeemSpecificLP(uint256 _lpRedeemIndex)
+        external
+        returns (uint256)
+    {
+        Liquidity memory liquidity = liquidityAdds[_lpRedeemIndex];
+        if (liquidity.withdrawTime > uint32(block.timestamp))
+            revert NoRedeemableLPTokens();
+        uint256 _redeemableLpTokens = uint256(liquidity.amount);
+        if (_redeemableLpTokens == 0) {
+            delete liquidityAdds[_lpRedeemIndex];
+        } else {
+            sushiRouter.removeLiquidityETH(
+                LP_TOKEN_ADDR,
+                _redeemableLpTokens,
+                1,
+                1,
+                address(this),
+                block.timestamp
+            );
+            delete liquidityAdds[_lpRedeemIndex];
+            _burnAPI3();
+            emit LiquidityRemoved(_redeemableLpTokens);
+        }
+        return (_redeemableLpTokens);
     }
 
     function _burnAPI3() internal {
