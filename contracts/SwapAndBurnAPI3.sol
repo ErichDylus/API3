@@ -11,7 +11,7 @@ pragma solidity >=0.8.4;
 
 /// @title Swap and Burn API3
 /** @notice simple programmatic token burn per API3 whitepaper: uses Sushiswap router to swap USDC held by this contract for API3 tokens,
- *** LPs half (redeemable to this contract after one year), then burns all remaining API3 tokens via the token contract;
+ *** LPs half (redeemable to this contract after the lpWithdrawDelay provided in constructor), then burns all remaining API3 tokens via the token contract;
  *** also auto-swaps any ETH sent directly to this contract for API3 tokens, which are then burned via the token contract */
 
 interface IUniswapV2Router02 {
@@ -99,6 +99,8 @@ contract SwapAndBurnAPI3 {
     address public constant WETH_ADDR =
         0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
+    uint256 public immutable lpWithdrawDelay;
+
     IUniswapV2Router02 public sushiRouter;
     IAPI3 public iAPI3Token;
     IERC20 public iUSDCToken;
@@ -116,7 +118,9 @@ contract SwapAndBurnAPI3 {
     event LiquidityProvided(uint256 liquidityAdded);
     event LiquidityRemoved(uint256 liquidityRemoved);
 
-    constructor() payable {
+    /// @param _lpWithdrawDelay: delay (in seconds) before liquidity may be withdrawn, e.g. 31557600 for one year
+    constructor(uint256 _lpWithdrawDelay) payable {
+        lpWithdrawDelay = _lpWithdrawDelay;
         sushiRouter = IUniswapV2Router02(SUSHI_ROUTER_ADDR);
         iAPI3Token = IAPI3(API3_TOKEN_ADDR);
         iUSDCToken = IERC20(USDC_TOKEN_ADDR);
@@ -173,7 +177,7 @@ contract SwapAndBurnAPI3 {
         );
         emit LiquidityProvided(liquidity);
         liquidityAdds[lpAddIndex] = Liquidity(
-            uint32(block.timestamp + 31557600),
+            uint32(block.timestamp + lpWithdrawDelay),
             uint224(liquidity)
         );
         unchecked {
