@@ -115,8 +115,8 @@ contract SwapAndBurnAPI3 {
     error NoUSDCTokens();
 
     event API3Burned(uint256 amountBurned);
-    event LiquidityProvided(uint256 liquidityAdded);
-    event LiquidityRemoved(uint256 liquidityRemoved);
+    event LiquidityProvided(uint256 liquidityAdded, uint256 indexed lpIndex);
+    event LiquidityRemoved(uint256 liquidityRemoved, uint256 indexed lpIndex);
 
     /// @param _lpWithdrawDelay: delay (in seconds) before liquidity may be withdrawn, e.g. 31557600 for one year
     constructor(uint256 _lpWithdrawDelay) payable {
@@ -175,7 +175,7 @@ contract SwapAndBurnAPI3 {
             address(this),
             block.timestamp
         );
-        emit LiquidityProvided(liquidity);
+        emit LiquidityProvided(liquidity, lpAddIndex);
         liquidityAdds[lpAddIndex] = Liquidity(
             uint32(block.timestamp + lpWithdrawDelay),
             uint224(liquidity)
@@ -211,11 +211,11 @@ contract SwapAndBurnAPI3 {
                 block.timestamp
             );
             delete liquidityAdds[lpRedeemIndex];
+            emit LiquidityRemoved(_redeemableLpTokens, lpRedeemIndex);
             unchecked {
                 ++lpRedeemIndex;
             }
             _burnAPI3();
-            emit LiquidityRemoved(_redeemableLpTokens);
         }
         return (_redeemableLpTokens);
     }
@@ -246,8 +246,8 @@ contract SwapAndBurnAPI3 {
                 block.timestamp
             );
             delete liquidityAdds[_lpRedeemIndex];
+            emit LiquidityRemoved(_redeemableLpTokens, _lpRedeemIndex);
             _burnAPI3();
-            emit LiquidityRemoved(_redeemableLpTokens);
         }
         return (_redeemableLpTokens);
     }
