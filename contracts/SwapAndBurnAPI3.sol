@@ -101,7 +101,6 @@ contract SwapAndBurnAPI3 {
     uint256 lpAddIndex;
     uint256 lpRedeemIndex;
     mapping(uint256 => Liquidity) public liquidityAdds;
-    mapping(uint256 => uint256) public lpShareIndex;
 
     error NoAPI3Tokens();
     error NoRedeemableLPTokens();
@@ -126,19 +125,24 @@ contract SwapAndBurnAPI3 {
 
     /// @notice receives ETH sent to address(this) except if from sushiRouter, swaps for API3, and calls the internal _burnAPI3() function
     receive() external payable {
-        if (msg.sender == SUSHI_ROUTER_ADDR) {} else {
-            sushiRouter.swapExactETHForTokens{
-                value: msg.value + address(this).balance
-            }(0, _getPathForETHtoAPI3(), address(this), block.timestamp);
+        if (msg.sender != SUSHI_ROUTER_ADDR) {
+            uint256 amountEth = msg.value + address(this).balance;
+            sushiRouter.swapExactETHForTokens{value: amountEth}(
+                0,
+                _getPathForETHtoAPI3(),
+                address(this),
+                block.timestamp
+            );
             _burnAPI3();
-        }
+        } else {}
     }
+
+    fallback() external payable {}
 
     /// @notice swaps USDC held by address(this) for ETH, swaps 3/4 of the ETH for API3
     function swapUSDCToAPI3AndEth() external {
         uint256 usdcBal = iUSDCToken.balanceOf(address(this));
         if (usdcBal == 0) revert NoUSDCTokens();
-        lpShareIndex[lpAddIndex] = usdcBal / 4;
         sushiRouter.swapExactTokensForETH(
             usdcBal,
             0,
@@ -146,12 +150,9 @@ contract SwapAndBurnAPI3 {
             payable(address(this)),
             block.timestamp
         );
-        sushiRouter.swapExactETHForTokens{value: (address(this).balance * 3) / 4}(
-            0,
-            _getPathForETHtoAPI3(),
-            address(this),
-            block.timestamp
-        );
+        sushiRouter.swapExactETHForTokens{
+            value: (address(this).balance * 3) / 4
+        }(0, _getPathForETHtoAPI3(), address(this), block.timestamp);
     }
 
     /// @notice LPs the remaining ETH and 1/3 of the API3, and calls the internal _burnAPI3() function
@@ -159,16 +160,17 @@ contract SwapAndBurnAPI3 {
      ** To implement one-way liquidity, insert "iLPToken.transfer(address(0), iLPToken.balanceOf(address(this)));" before _burnAPI3(). Callable by anyone. */
     // current error: INSUFFICIENT_B_AMOUNT; check calculation of ETH
     function lpAndBurn() external {
-        uint256 lpShare = lpShareIndex[lpAddIndex];
-        require(lpShare != 0, "Nothing to LP");
+        uint256 api3Bal = iAPI3Token.balanceOf(address(this));
+        require(api3Bal != 0, "Nothing to LP");
+        uint256 ethBal = address(this).balance;
         (, , uint256 liquidity) = sushiRouter.addLiquidityETH{
-            value: address(this).balance
+            value: ethBal
         }(
             API3_TOKEN_ADDR,
-            lpShare,
-            (lpShare * 9) / 10,
-            (address(this).balance * 9) / 10,
-            address(this),
+            api3Bal / 3,
+            (api3Bal * 3) / 10, // 90% of 1/3 of the api3Bal
+            (ethBal * 9) / 10, // 90% of the ethBal, which should be approx. 1/3 of the api3Bal in value
+            payable(address(this)),
             block.timestamp
         );
         emit LiquidityProvided(liquidity, lpAddIndex);
