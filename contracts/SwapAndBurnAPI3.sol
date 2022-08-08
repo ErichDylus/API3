@@ -124,6 +124,7 @@ contract SwapAndBurnAPI3 {
     }
 
     /// @notice receives ETH sent to address(this) except if from sushiRouter, swaps for API3, and calls the internal _burnAPI3() function
+    /// current error
     receive() external payable {
         if (msg.sender != SUSHI_ROUTER_ADDR) {
             uint256 amountEth = msg.value + address(this).balance;
@@ -139,7 +140,7 @@ contract SwapAndBurnAPI3 {
 
     fallback() external payable {}
 
-    /// @notice swaps USDC held by address(this) for ETH, swaps 3/4 of the ETH for API3
+    /// @notice swaps USDC held by address(this) for ETH, swaps 3/4 of the ETH for API3, then calls _lpAndBurn(). Callable by anyone.
     function swapUSDCToAPI3AndEth() external {
         uint256 usdcBal = iUSDCToken.balanceOf(address(this));
         if (usdcBal == 0) revert NoUSDCTokens();
@@ -153,35 +154,7 @@ contract SwapAndBurnAPI3 {
         sushiRouter.swapExactETHForTokens{
             value: (address(this).balance * 3) / 4
         }(0, _getPathForETHtoAPI3(), address(this), block.timestamp);
-    }
-
-    /// @notice LPs the remaining ETH and 1/3 of the API3, and calls the internal _burnAPI3() function
-    /** @dev LP has 10% buffer. Liquidity locked for a year.
-     ** To implement one-way liquidity, insert "iLPToken.transfer(address(0), iLPToken.balanceOf(address(this)));" before _burnAPI3(). Callable by anyone. */
-    // current error: INSUFFICIENT_B_AMOUNT; check calculation of ETH
-    function lpAndBurn() external {
-        uint256 api3Bal = iAPI3Token.balanceOf(address(this));
-        require(api3Bal != 0, "Nothing to LP");
-        uint256 ethBal = address(this).balance;
-        (, , uint256 liquidity) = sushiRouter.addLiquidityETH{
-            value: ethBal
-        }(
-            API3_TOKEN_ADDR,
-            api3Bal / 3,
-            (api3Bal * 3) / 10, // 90% of 1/3 of the api3Bal
-            (ethBal * 9) / 10, // 90% of the ethBal, which should be approx. 1/3 of the api3Bal in value
-            payable(address(this)),
-            block.timestamp
-        );
-        emit LiquidityProvided(liquidity, lpAddIndex);
-        liquidityAdds[lpAddIndex] = Liquidity(
-            uint32(block.timestamp + lpWithdrawDelay),
-            uint224(liquidity)
-        );
-        unchecked {
-            ++lpAddIndex;
-        }
-        _burnAPI3();
+        _lpAndBurn();
     }
 
     /** @dev checks earliest Liquidity struct to see if any LP tokens are redeemable,
@@ -200,20 +173,7 @@ contract SwapAndBurnAPI3 {
                 ++lpRedeemIndex;
             }
         } else {
-            sushiRouter.removeLiquidityETH(
-                LP_TOKEN_ADDR,
-                _redeemableLpTokens,
-                0,
-                0,
-                payable(address(this)),
-                block.timestamp
-            );
-            delete liquidityAdds[lpRedeemIndex];
-            emit LiquidityRemoved(_redeemableLpTokens, lpRedeemIndex);
-            unchecked {
-                ++lpRedeemIndex;
-            }
-            _burnAPI3();
+            _redeemLP(_redeemableLpTokens);
         }
         return (_redeemableLpTokens);
     }
@@ -235,17 +195,7 @@ contract SwapAndBurnAPI3 {
         if (_redeemableLpTokens == 0) {
             delete liquidityAdds[_lpRedeemIndex];
         } else {
-            sushiRouter.removeLiquidityETH(
-                LP_TOKEN_ADDR,
-                _redeemableLpTokens,
-                0,
-                0,
-                payable(address(this)),
-                block.timestamp
-            );
-            delete liquidityAdds[_lpRedeemIndex];
-            emit LiquidityRemoved(_redeemableLpTokens, _lpRedeemIndex);
-            _burnAPI3();
+            _redeemSpecificLP(_redeemableLpTokens, _lpRedeemIndex);
         }
         return (_redeemableLpTokens);
     }
@@ -255,6 +205,66 @@ contract SwapAndBurnAPI3 {
         if (api3Bal == 0) revert NoAPI3Tokens();
         iAPI3Token.burn(api3Bal);
         emit API3Burned(api3Bal);
+    }
+    
+    /// @notice LPs the remaining ETH and 1/3 of the API3, and calls _burnAPI3()
+    /** @dev LP has 10% buffer. Liquidity locked for a year. To implement one-way liquidity,
+     ** insert "iLPToken.transfer(address(0), iLPToken.balanceOf(address(this)));" before _burnAPI3(). */
+    function _lpAndBurn() internal {
+        uint256 api3Bal = iAPI3Token.balanceOf(address(this));
+        require(api3Bal != 0, "Nothing to LP");
+        uint256 ethBal = address(this).balance;
+        (, , uint256 liquidity) = sushiRouter.addLiquidityETH{value: ethBal}(
+            API3_TOKEN_ADDR,
+            api3Bal / 3,
+            ((api3Bal * 3) / 10), // 90% of 1/3 of the api3Bal
+            ((ethBal * 9) / 10), // 90% of the ethBal, which should be approx. 1/3 of the api3Bal in value
+            payable(address(this)),
+            block.timestamp
+        );
+        emit LiquidityProvided(liquidity, lpAddIndex);
+        liquidityAdds[lpAddIndex] = Liquidity(
+            uint32(block.timestamp + lpWithdrawDelay),
+            uint224(liquidity)
+        );
+        unchecked {
+            ++lpAddIndex;
+        }
+        _burnAPI3();
+    }
+
+    function _redeemLP(uint256 _redeemableLpTokens) internal {
+        sushiRouter.removeLiquidityETH(
+            LP_TOKEN_ADDR,
+            _redeemableLpTokens,
+            1,
+            1,
+            payable(address(this)),
+            block.timestamp
+        );
+        delete liquidityAdds[lpRedeemIndex];
+        emit LiquidityRemoved(_redeemableLpTokens, lpRedeemIndex);
+        unchecked {
+            ++lpRedeemIndex;
+        }
+        _burnAPI3();
+    }
+
+    function _redeemSpecificLP(
+        uint256 _redeemableLpTokens,
+        uint256 _lpRedeemIndex
+    ) internal {
+        sushiRouter.removeLiquidityETH(
+            LP_TOKEN_ADDR,
+            _redeemableLpTokens,
+            1,
+            1,
+            payable(address(this)),
+            block.timestamp
+        );
+        delete liquidityAdds[_lpRedeemIndex];
+        emit LiquidityRemoved(_redeemableLpTokens, _lpRedeemIndex);
+        _burnAPI3();
     }
 
     /// @return path: the router path for ETH/API3 swap
