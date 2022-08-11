@@ -9,7 +9,7 @@
 
 pragma solidity >=0.8.4;
 
-/// @title Swap and Burn API3
+/// @title Swap USDC and Burn API3
 /** @notice simple programmatic token burn per API3 whitepaper: uses Sushiswap router to swap USDC held by this contract for API3 tokens,
  *** LPs half (redeemable to this contract after the lpWithdrawDelay provided in constructor), then burns all remaining API3 tokens via the token contract;
  *** also auto-swaps any ETH sent directly to this contract for API3 tokens, which are then burned via the token contract */
@@ -74,7 +74,7 @@ interface IERC20 {
     function transfer(address to, uint256 value) external returns (bool);
 }
 
-contract SwapAndBurnAPI3 {
+contract SwapUSDCAndBurnAPI3 {
     struct Liquidity {
         uint32 withdrawTime;
         uint224 amount;
@@ -224,13 +224,13 @@ contract SwapAndBurnAPI3 {
         _burnAPI3();
     }
 
-    /// @notice redeems the LP for the current index, called by redeemLP(), and burns redeemed API3
+    /// @notice redeems the LP for the current index, swaps redeemed ETH for API3, and burns all API3
     function _redeemLP(uint256 _redeemableLpTokens) internal {
         sushiRouter.removeLiquidityETH(
-            LP_TOKEN_ADDR,
+            API3_TOKEN_ADDR,
             _redeemableLpTokens,
-            1,
-            1,
+            0,
+            0,
             payable(address(this)),
             block.timestamp
         );
@@ -239,24 +239,36 @@ contract SwapAndBurnAPI3 {
         unchecked {
             ++lpRedeemIndex;
         }
+        sushiRouter.swapExactETHForTokens{value: address(this).balance}(
+            1,
+            _getPathForETHtoAPI3(),
+            address(this),
+            block.timestamp
+        );
         _burnAPI3();
     }
 
-    /// @notice redeems the LP for the index submitted as a param to redeemSpecificLP(), and burns redeemed API3
+    /// @notice redeems the LP for the index submitted as a param to redeemSpecificLP(), swaps redeemed ETH for API3, and burns all API3
     function _redeemSpecificLP(
         uint256 _redeemableLpTokens,
         uint256 _lpRedeemIndex
     ) internal {
         sushiRouter.removeLiquidityETH(
-            LP_TOKEN_ADDR,
+            API3_TOKEN_ADDR,
             _redeemableLpTokens,
-            1,
-            1,
+            0,
+            0,
             payable(address(this)),
             block.timestamp
         );
         delete liquidityAdds[_lpRedeemIndex];
         emit LiquidityRemoved(_redeemableLpTokens, _lpRedeemIndex);
+        sushiRouter.swapExactETHForTokens{value: address(this).balance}(
+            1,
+            _getPathForETHtoAPI3(),
+            address(this),
+            block.timestamp
+        );
         _burnAPI3();
     }
 
