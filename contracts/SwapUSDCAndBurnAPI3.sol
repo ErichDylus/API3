@@ -203,7 +203,7 @@ contract SwapUSDCAndBurnAPI3 {
      ** insert "iLPToken.transfer(address(0), iLPToken.balanceOf(address(this)));" before _burnAPI3(). */
     function _lpAndBurn() internal {
         uint256 api3Bal = iAPI3Token.balanceOf(address(this));
-        require(api3Bal != 0, "Nothing to LP");
+        if (api3Bal == 0) revert NoAPI3Tokens();
         uint256 ethBal = address(this).balance;
         (, , uint256 liquidity) = sushiRouter.addLiquidityETH{value: ethBal}(
             API3_TOKEN_ADDR,
