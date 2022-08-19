@@ -12,10 +12,19 @@ pragma solidity >=0.8.16;
 /// @title Swap USDC and Burn API3 and LP with USDC Pair
 /** @notice simple programmatic token burn per API3 whitepaper: uses Sushiswap router to swap USDC held by this contract for API3 tokens,
  *** LPs half (redeemable to this contract after the lpWithdrawDelay provided in constructor), then burns all remaining API3 tokens via the token contract;
- *** also auto-swaps any ETH sent directly to this contract for API3 tokens, which are then burned via the token contract 
+ *** also auto-swaps any ETH sent directly to this contract for API3 tokens, which are then burned via the token contract
  *** adaptation of https://github.com/ErichDylus/API3/blob/main/contracts/SwapUSDCAndBurnAPI3.sol to an API3/USDC pair lp and swap */
 
-//// TODO: swap in ETH pair until certain level of API3/USDC liquidity, then swap in USDC pair
+interface IUniswapV2Pair {
+    function getReserves()
+        external
+        view
+        returns (
+            uint112 reserve0,
+            uint112 reserve1,
+            uint32 blockTimestampLast
+        );
+}
 
 interface IUniswapV2Router02 {
     function addLiquidity(
@@ -51,6 +60,14 @@ interface IUniswapV2Router02 {
         address to,
         uint256 deadline
     ) external payable returns (uint256[] memory amounts);
+
+    function swapExactTokensForETH(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to,
+        uint256 deadline
+    ) external returns (uint256[] memory amounts);
 
     function swapExactTokensForTokens(
         uint256 amountIn,
@@ -97,6 +114,7 @@ contract SwapUSDCAndBurnAPI3AndLpWithUSDCPair {
     uint256 public immutable lpWithdrawDelay;
 
     IUniswapV2Router02 public sushiRouter;
+    IUniswapV2Pair public usdcApi3Pair;
     IAPI3 public iAPI3Token;
     IERC20 public iUSDCToken;
     IERC20 public iLPToken;
@@ -113,11 +131,12 @@ contract SwapUSDCAndBurnAPI3AndLpWithUSDCPair {
     event LiquidityProvided(uint256 liquidityAdded, uint256 indexed lpIndex);
     event LiquidityRemoved(uint256 liquidityRemoved, uint256 indexed lpIndex);
 
-    /// @param _lpTokenAddr: address of API3/USDC LP token contract
+    /// @param _lpTokenAddr: address of API3/USDC pair LP token contract
     /// @param _lpWithdrawDelay: delay (in seconds) before liquidity may be withdrawn, e.g. 31557600 for one year
     constructor(address _lpTokenAddr, uint256 _lpWithdrawDelay) payable {
         lpWithdrawDelay = _lpWithdrawDelay;
         sushiRouter = IUniswapV2Router02(SUSHI_ROUTER_ADDR);
+        usdcApi3Pair = IUniswapV2Pair(_lpTokenAddr);
         iAPI3Token = IAPI3(API3_TOKEN_ADDR);
         iUSDCToken = IERC20(USDC_TOKEN_ADDR);
         iLPToken = IERC20(_lpTokenAddr);
@@ -141,18 +160,40 @@ contract SwapUSDCAndBurnAPI3AndLpWithUSDCPair {
         } else {}
     }
 
-    /// @notice swaps USDC held by address(this) for ETH, swaps 3/4 of the ETH for API3 tokens, then calls _lpAndBurn(). Callable by anyone.
+    /** @notice if at least 50000 USDC reserves in API3/USDC pool, swaps 3/4 of USDC held by address(this) for API3 tokens.
+     ** If the API3/USDC does not have sufficient reserves, 3/4 of the USDC is swapped for ETH, which is then swapped for API3 tokens.
+     ** Then calls _lpAndBurn(). Callable by anyone. */
+    /// @dev checks API3/USDC liquidity to prevent manipulation/MEV attacks if too low, in which case the API3/ETH pair is used.
     function swapUSDCToAPI3AndLP() external {
         uint256 usdcBal = iUSDCToken.balanceOf(address(this));
         if (usdcBal == 0) revert NoUSDCTokens();
-        sushiRouter.swapExactTokensForTokens(
-            (usdcBal / 3) * 4,
-            1,
-            _getPathForUSDCtoAPI3(),
-            address(this),
-            block.timestamp
-        );
-        _lpAndBurn(usdcBal);
+        // check if API3/USDC pair has sufficient liquidity (currently at least 50000 USDC reserve, *assuming USDC is token0*) to swap, otherwise use API3/ETH pair
+        (uint112 reserveUsdc, , ) = usdcApi3Pair.getReserves();
+        if (reserveUsdc > 50000) {
+            sushiRouter.swapExactTokensForTokens(
+                (usdcBal * 3) / 4,
+                1,
+                _getPathForUSDCtoAPI3(),
+                address(this),
+                block.timestamp
+            );
+        } else {
+            sushiRouter.swapExactTokensForETH(
+                (usdcBal * 3) / 4,
+                0,
+                _getPathForUSDCtoETH(),
+                payable(address(this)),
+                block.timestamp
+            );
+            sushiRouter.swapExactETHForTokens{value: address(this).balance}(
+                1,
+                _getPathForETHtoAPI3(),
+                address(this),
+                block.timestamp
+            );
+        }
+        // use remaining USDC to LP
+        _lpAndBurn(usdcBal / 4);
     }
 
     /** @dev checks earliest Liquidity struct to see if any LP tokens are redeemable,
@@ -269,7 +310,7 @@ contract SwapUSDCAndBurnAPI3AndLpWithUSDCPair {
         );
         delete liquidityAdds[_lpRedeemIndex];
         emit LiquidityRemoved(_redeemableLpTokens, _lpRedeemIndex);
-        sushiRouter.swapExactTokensForTokens(   
+        sushiRouter.swapExactTokensForTokens(
             iUSDCToken.balanceOf(address(this)),
             1,
             _getPathForUSDCtoAPI3(),
