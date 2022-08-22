@@ -146,7 +146,7 @@ contract SwapUSDCAndBurnAPI3AndLpWithUSDCPair {
         iLPToken.approve(SUSHI_ROUTER_ADDR, type(uint256).max);
     }
 
-    /// @notice receives ETH sent to address(this) except if from sushiRouter, swaps for API3 tokens, and calls _burnAPI3()
+    /// @notice receives ETH sent to address(this) except if from AMM router, swaps for API3 tokens, and calls _burnAPI3()
     /// also useful for burning any leftover/dust API3 tokens held by or sent to this contract
     receive() external payable {
         if (msg.sender != SUSHI_ROUTER_ADDR) {
@@ -167,8 +167,10 @@ contract SwapUSDCAndBurnAPI3AndLpWithUSDCPair {
     function swapUSDCToAPI3AndLP() external {
         uint256 usdcBal = iUSDCToken.balanceOf(address(this));
         if (usdcBal == 0) revert NoUSDCTokens();
-        // check if API3/USDC pair has sufficient liquidity (currently at least 50000 USDC reserve, *assuming USDC is token0*) to swap, otherwise use API3/ETH pair
-        (uint112 reserveUsdc, , ) = usdcApi3Pair.getReserves();
+        // check if API3/USDC pair has sufficient liquidity (currently at least 50000 USDC reserve) to swap, otherwise use API3/ETH pair
+        // USDC_TOKEN_ADDR has a higher sort order than API3_TOKEN_ADDR, so USDC_TOKEN_ADDR is token1 in usdcApi3Pair
+        // see: https://docs.uniswap.org/protocol/V2/reference/smart-contracts/pair#token0 and https://etherscan.io/tx/0x529e8aa9fe561c93a93fbcce35628b9be12f193efb2a94ee9251f08385454046#eventlog
+        (, uint112 reserveUsdc, ) = usdcApi3Pair.getReserves();
         if (reserveUsdc > 50000) {
             sushiRouter.swapExactTokensForTokens(
                 (usdcBal * 3) / 4,
