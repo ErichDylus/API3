@@ -6,7 +6,7 @@
 
 ## Grant Agreement
 
-This Grant Agreement (this “Agreement”) is entered into as of [DATE] (the “Effective Date”) by and between __________________ (“Party A”) and API3 Foundation, a Cayman Islands foundation company (“API3 Foundation”), as governed by the API3 Decentralized Autonomous Organization associated with Ethereum mainnet contract address 0x6dd655f10d4b9E242aE186D9050B68F725c76d76 (“API3 DAO”) (API3 Foundation as governed by the API3 DAO, “API3”) (Party A and API3 are each a “Party” and both, the “Parties”).
+This Grant Agreement (this “Agreement”) is entered into as of [DATE] (the “Effective Date”) by and between __________________ (“Party A”) and API3 Foundation, a Cayman Islands foundation company limited by guarantee (“API3”) (Party A and API3 are each a “Party” and both, the “Parties”).
 
 API3 has deemed that Party A has the necessary qualifications, experience, and abilities to provide Services (as such term is defined in Section 1 below) to and for the benefit of API3, and Party A has agreed to provide such Services to and for the benefit of API3 pursuant to the terms and conditions set forth in this Agreement, with Party A to be deemed an independent contractor for the API3 Foundation (as more particularly set forth in Section 4 below, the “Relationship”). 
 
@@ -28,7 +28,7 @@ a.	API3 or its designee will pay Party A [_________ USDC Tokens (Ethereum mainne
 
 b.	[API3 will reimburse Party A for all reasonable and necessary expenses incurred by Party A directly attributable to the Services, subject to API3’s express prior written approval of such expenses.]
 
-4.	**Independent Contractor Relationship**. In providing the Services under this Agreement, the Parties expressly agree that Party A is acting as an independent contractor and not as an employee or agent of API3 Foundation or any other related entity. Party A and API3 acknowledge and agree that this Agreement does not create a partnership of any kind, nor any joint venture or similar relationship, and is exclusively a contract for service. Party A is not required to pay or make any contributions of any monetary value towards any governmental entity for tax purposes, unemployment compensation, worker’s compensation, insurance premium, pension or any other employee benefit with respect to API3 during the Term. Party A acknowledges and agrees that Party A is solely responsible for complying with all laws, regulations, and other governmental requirements applicable to Party A including but not limited to paying all taxes, expenses, and other amounts due from Party A of any kind related to this Agreement.
+4.	**Independent Contractor Relationship**. In providing the Services under this Agreement, the Parties expressly agree that Party A is acting as an independent contractor and not as an employee or agent of API3 Foundation or any other related entity. Party A and API3 acknowledge and agree that this Agreement does not create a partnership of any kind, nor any joint venture or similar relationship, and is exclusively a contract for service. Party A acknowledges and agrees that Party A is solely responsible for complying with all laws, regulations, and other governmental requirements applicable to Party A including but not limited to paying all taxes, expenses, and other amounts due from Party A of any kind related to this Agreement. [Party A expressly attests that their provision of Services and compensation received under this Agreement comprises approximately 30% or less of their aggregate workload and income received from all third parties at the time of execution and is reasonably likely to continue accordingly during the term]
 
 // applicable for where grantee will be privy to confidential information, such as information subject to a third party's NDA, or perhaps where a grantee wishes to preserve their own anonymity, etc.
 
@@ -63,8 +63,6 @@ a.  Each Party agrees that use or disclosure of any Confidential Information in 
 b.  Each Party agrees to defend, indemnify and hold harmless the other Party against any and all liabilities, claims, suits, losses, damages and expenses, including reasonable attorney's fees, incurred by or asserted against the indemnified Party to the extent caused by the acts or omissions of the indemnifying Party in connection with the performance of Services under this Agreement. 
 
 c.  API3 hereby acknowledges and agrees that Party A has made no express warranties concerning the Services.  It is solely API3’s responsibility to determine whether the Services will suit API3’s needs or goals. THE SERVICES ARE PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND.  API3, TO THE FULLEST EXTENT PERMITTED BY LAW, HEREBY DISCLAIMS AND API3 HEREBY WAIVES ALL WARRANTIES BY PARTY A, INCLUDING, BUT NOT LIMITED TO, ALL IMPLIED WARRANTIES OF FITNESS FOR A PARTICULAR PURPOSE, ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND WARRANTIES OF NON-INFRINGEMENT OF THIRD PARTY RIGHTS IN CONNECTION WITH THE SERVICES. PARTY A DOES NOT WARRANT, AND API3 HEREBY WAIVES ANY WARRANTY, THAT THE SERVICES WILL YIELD ANY PARTICULAR RESULTS OR SUCCESSFUL OUTCOMES.  PARTY A DOES NOT MAKE ANY WARRANTY AND API3 HEREBY WAIVES ANY AND ALL WARRANTIES AS TO THE RESULTS OBTAINED FROM THE SERVICES.
- 
-d.  LIMITATION OF LIABILITY: PARTY A SHALL NOT BE LIABLE FOR ANY LOST PROFITS OR CONSEQUENTIAL, EXEMPLARY, INCIDENTAL OR PUNITIVE DAMAGES (INCLUDING, WITHOUT LIMITATION, IN CONNECTION WITH THE SERVICES PROVIDED HEREUNDER, REGARDLESS OF THE FORM OF ACTION, WHETHER IN CONTRACT OR IN TORT, INCLUDING NEGLIGENCE, AND REGARDLESS OF WHETHER SUCH DAMAGES ARE REASONABLY FORESEEABLE.
 
 8.	**Assignment**. Neither Party will voluntarily, or by operation of law, assign or otherwise transfer its obligations under this Agreement without the prior written consent of the other Party. 
 
@@ -72,7 +70,7 @@ d.  LIMITATION OF LIABILITY: PARTY A SHALL NOT BE LIABLE FOR ANY LOST PROFITS OR
 
 10.	**Amendment**. This Agreement may be amended or modified only by a written agreement signed by both Parties.
 
-11.	**Jurisdiction and Governing Law**. This Agreement will be governed by and construed in accordance with the laws of the Cayman Islands, without regard to the principles of conflict of laws. Any dispute, claim or controversy arising out of or relating to this Agreement or the breach, termination, enforcement, interpretation or validity thereof, including the determination of the scope or applicability of this Agreement to arbitrate, shall be determined by arbitration before one arbitrator, administered by JAMS pursuant to its Streamlined Arbitration Rules and Procedures.
+11.	**Jurisdiction and Governing Law**. This Agreement will be governed by and construed in accordance with the laws of the Cayman Islands, without regard to the principles of conflict of laws. Any dispute, claim or controversy arising out of or relating to this Agreement or the breach, termination, enforcement, interpretation or validity thereof, including the determination of the scope or applicability of this Agreement to arbitrate, shall be determined by arbitration before one arbitrator. The arbitration shall be administered by JAMS pursuant to its Comprehensive Arbitration Rules and Procedures and in accordance with the Expedited Procedures in those Rules.  
 
 12.	**Miscellaneous**. 
 
@@ -94,14 +92,17 @@ e.	This Agreement may be executed in counterparts, each of which shall be deemed
 The Parties hereto have executed this Agreement as of the Effective Date.
 
 
+**Party A**
 
 [PARTY A SIGNATURE]
+
 By: 
-**[Party A]
-Ethereum Address: ________________________**
 
 
+
+
+**API3 Foundation**
 
 [API3 SIGNATURE]
+
 By: 
-**API3 Foundation**
