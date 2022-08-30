@@ -10,34 +10,37 @@
 pragma solidity >=0.8.16;
 
 import "https://github.com/ErichDylus/API3/blob/main/contracts/SwapUSDCAndBurnAPI3.sol";
-import "https://github.com/paulrberg/prb-test/blob/main/src/PRBTest.sol";
+import {
+    PRBTest
+} from "https://github.com/paulrberg/prb-test/blob/main/src/PRBTest.sol";
 
 /// @title Swap USDC and Burn API3 Test
 
-contract SwapUSDCAndBurnAPI3Test is SwapUSDCAndBurnAPI3, PRBTest {
+contract SwapUSDCAndBurnAPI3Test is PRBTest {
     address public tester;
+
     SwapUSDCAndBurnAPI3 public contracttest;
 
-    function beforeEach() public {
-        contracttest = new SwapUSDCAndBurnAPI3();
+    function beforeEach(uint256 _lpWithdrawDelay) external {
+        contracttest = new SwapUSDCAndBurnAPI3(_lpWithdrawDelay);
         tester = msg.sender;
     }
 
-    function checkSwapAndBurn() public {
+    function checkSwapAndBurn() external {
         (bool success, ) = address(contracttest).delegatecall(
             abi.encodeWithSignature("swapUSDCToAPI3AndBurn()")
         );
         require(success, "call failed");
     }
 
-    function checkSwapAndLpAndBurn() public {
+    function checkSwapAndLpAndBurn() external {
         (bool success, ) = address(contracttest).delegatecall(
             abi.encodeWithSignature("swapUSDCToAPI3AndLpAndBurn()")
         );
         require(success, "call failed");
     }
 
-    function checkRedeemLp() public {
+    function checkRedeemLp() external {
         uint256 _redeemIndex = contracttest.lpRedeemIndex();
         (bool success, ) = address(contracttest).delegatecall(
             abi.encodeWithSignature("redeemLP()")
@@ -51,7 +54,7 @@ contract SwapUSDCAndBurnAPI3Test is SwapUSDCAndBurnAPI3, PRBTest {
             );
     }
 
-    function checkRedeemSpecificLp() public {
+    function checkRedeemSpecificLp(uint256 _lpRedeemIndex) external {
         uint256 _redeemIndex = contracttest.lpRedeemIndex();
         (bool success, ) = address(contracttest).delegatecall(
             abi.encodeWithSignature("redeemSpecificLP(uint256)", _lpRedeemIndex)
@@ -65,9 +68,10 @@ contract SwapUSDCAndBurnAPI3Test is SwapUSDCAndBurnAPI3, PRBTest {
             );
     }
 
-    function checkETHpath() public {
+    function checkETHpath() external {
         address[] memory testpath = new address[](2);
-        testpath = _getPathForUSDCtoETH();
+        testpath[0] = contracttest.USDC_TOKEN_ADDR();
+        testpath[1] = contracttest.WETH_ADDR();
         assertEq(
             testpath[0],
             0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48,
@@ -80,9 +84,10 @@ contract SwapUSDCAndBurnAPI3Test is SwapUSDCAndBurnAPI3, PRBTest {
         );
     }
 
-    function checkAPI3path() public {
+    function checkAPI3path() external {
         address[] memory testpath = new address[](2);
-        testpath = _getPathForETHtoAPI3();
+        testpath[0] = contracttest.WETH_ADDR();
+        testpath[1] = contracttest.API3_TOKEN_ADDR();
         assertEq(
             testpath[0],
             0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2,
