@@ -30,74 +30,64 @@ contract Dqrng {
     mapping(address => bool) public isRelayer;
 
     error OnlyDeployer();
-    error NoNFT1();
-    error NoNFT2();
-    error NoNFT3();
+    error NoNFT(address airnode);
     error NoRelayer();
-    error NoRequest();
-    error SignatureMissing();
+    error RequesterRelayerMismatch();
+    error SignatureMissing(uint256 sigIndex);
 
     event RelayerRequested(
         address indexed relayer,
         address requester,
-        address airnode1,
-        address airnode2,
-        address airnode3
+        address[] airnodes
     );
 
-    /// @dev must derive, designate and fund sponsorWallet after deployment
     constructor() {
         deployer = msg.sender;
     }
 
     /// @notice request dQRNG via relayer, provided requester is holding necessary access NFTs
-    /// @dev each relayer will listen for RelayerRequested events where it is specified as relayer
-    /// @param _airnode1: first QRNG airnode contract address, see https://docs.api3.org/qrng/providers.html
-    /// @param _airnode2: second QRNG airnode contract address, see https://docs.api3.org/qrng/providers.html
-    /// @param _airnode3: third QRNG airnode contract address, see https://docs.api3.org/qrng/providers.html
-    /// @param _relayer: address which coordinates commit-reveal scheme using the airnode addresses and responds using the sponsorWallet
-    function requestDQRNG(
-        address _airnode1,
-        address _airnode2,
-        address _airnode3,
+    /// @dev each relayer listens for RelayerRequested events where it is specified as relayer
+    /// @param _airnodeAddresses: array of requested QRNG airnode contract addresses, see https://docs.api3.org/qrng/providers.html
+    /// @param _relayer: address which coordinates commit-reveal scheme using the airnode addresses and responds
+    function requestDqrng(
+        address[] calldata _airnodeAddresses,
         address _relayer
     ) external {
-        if (_relayer == address(0)) revert NoRelayer();
-        if (ERC721(airnodeToNFT[_airnode1]).balanceOf(msg.sender) == 0)
-            revert NoNFT1();
-        if (ERC721(airnodeToNFT[_airnode2]).balanceOf(msg.sender) == 0)
-            revert NoNFT2();
-        if (ERC721(airnodeToNFT[_airnode3]).balanceOf(msg.sender) == 0)
-            revert NoNFT3();
+        if (!isRelayer[_relayer]) revert NoRelayer();
+        address[] memory airnodes = _airnodeAddresses;
+        for (uint256 i = 0; i < airnodes.length; ) {
+            if (ERC721(airnodeToNFT[airnodes[i]]).balanceOf(msg.sender) == 0)
+                revert NoNFT(airnodes[i]);
+            unchecked {
+                ++i;
+            }
+        }
 
         requesterToRelayer[msg.sender] = _relayer;
 
-        emit RelayerRequested(
-            _relayer,
-            msg.sender,
-            _airnode1,
-            _airnode2,
-            _airnode3
-        );
+        emit RelayerRequested(_relayer, msg.sender, airnodes);
     }
 
-    /// @dev relayer responds with the aggregated random number and all signatures here
+    /// @dev relayer responds with the aggregated random number and all signatures here; checks if each sig != 0
     /// @param _requester: address of dQRNG requester
-    /// @param _airnode1Sig: signature from airnode1
-    /// @param _airnode2Sig: signature from airnode2
-    /// @param _airnode3Sig: signature from airnode3
+    /// @param _airnodeSigs: array of signatures corresponding to requested airnodes
     /// @param _randomNumber: aggregated quantum random number
+    /// @return _randomNumber: returns the aggregated random number for _requester
     function fulfill(
         address _requester,
-        bytes32 _airnode1Sig,
-        bytes32 _airnode2Sig,
-        bytes32 _airnode3Sig,
+        bytes32[] calldata _airnodeSigs,
         uint256 _randomNumber
     ) external returns (uint256) {
-        if (!isRelayer[msg.sender]) revert NoRelayer();
-        if (requesterToRelayer[_requester] == address(0)) revert NoRequest();
-        if (_airnode1Sig == 0 || _airnode2Sig == 0 || _airnode3Sig == 0)
-            revert SignatureMissing();
+        if (msg.sender != requesterToRelayer[_requester])
+            revert RequesterRelayerMismatch();
+
+        bytes32[] memory signatures = _airnodeSigs;
+        for (uint256 i = 0; i < signatures.length; ) {
+            if (signatures[i] == 0) revert SignatureMissing(i);
+            unchecked {
+                ++i;
+            }
+        }
 
         delete (requesterToRelayer[_requester]);
         return (_randomNumber);
@@ -117,7 +107,7 @@ contract Dqrng {
         delete (isRelayer[_relayer]);
     }
 
-    /// @notice for deployer to specify access NFT address mapped to airnode address
+    /// @notice for deployer to specify access NFT contract address mapped to airnode address
     /** @dev deployer may also amend or revoke by pointing the mapping to a new address or address(0);
      ** airnodeToNFT[] also ensures validity of airnode addresses passed to requestDQRNG() */
     /// @param _airnode: QRNG provider airnode address
