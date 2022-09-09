@@ -28,10 +28,12 @@ contract Dqrng {
     mapping(address => address) public airnodeToNFT;
     mapping(address => address) public requesterToRelayer;
     mapping(address => bool) public isRelayer;
+    mapping(address => bytes4) private requesterToSelector;
 
     error OnlyDeployer();
     error NoNFT(address airnode);
     error NoRelayer();
+    error RequesterCallFailed();
     error RequesterRelayerMismatch();
     error SignatureMissing(uint256 sigIndex);
 
@@ -45,52 +47,58 @@ contract Dqrng {
         deployer = msg.sender;
     }
 
-    /// @notice request dQRNG via relayer, provided requester is holding necessary access NFTs
+    /// @notice request dQRNG via relayer, provided requester is holding necessary access NFTs (represent on-chain API key for each respective airnode address)
     /// @dev each relayer listens for RelayerRequested events where it is specified as relayer
-    /// @param _airnodeAddresses: array of requested QRNG airnode contract addresses, see https://docs.api3.org/qrng/providers.html
+    /// @param _airnodes: array of requested QRNG airnode contract addresses, see https://docs.api3.org/qrng/providers.html
     /// @param _relayer: address which coordinates commit-reveal scheme using the airnode addresses and responds
+    /// @param _functionSelector: requester contract function identifier which will ultimately receive the random number from fulfull()
     function requestDqrng(
-        address[] calldata _airnodeAddresses,
-        address _relayer
+        address[] calldata _airnodes,
+        address _relayer,
+        bytes4 _functionSelector
     ) external {
         if (!isRelayer[_relayer]) revert NoRelayer();
-        address[] memory airnodes = _airnodeAddresses;
-        for (uint256 i = 0; i < airnodes.length; ) {
-            if (ERC721(airnodeToNFT[airnodes[i]]).balanceOf(msg.sender) == 0)
-                revert NoNFT(airnodes[i]);
+        for (uint256 i = 0; i < _airnodes.length; ) {
+            if (ERC721(airnodeToNFT[_airnodes[i]]).balanceOf(msg.sender) == 0)
+                revert NoNFT(_airnodes[i]);
             unchecked {
                 ++i;
             }
         }
 
         requesterToRelayer[msg.sender] = _relayer;
+        requesterToSelector[msg.sender] = _functionSelector;
 
-        emit RelayerRequested(_relayer, msg.sender, airnodes);
+        emit RelayerRequested(_relayer, msg.sender, _airnodes);
     }
 
     /// @dev relayer responds with the aggregated random number and all signatures here; checks if each sig != 0
     /// @param _requester: address of dQRNG requester
     /// @param _airnodeSigs: array of signatures corresponding to requested airnodes
     /// @param _randomNumber: aggregated quantum random number
-    /// @return _randomNumber: returns the aggregated random number for _requester
     function fulfill(
         address _requester,
         bytes32[] calldata _airnodeSigs,
         uint256 _randomNumber
-    ) external returns (uint256) {
+    ) external {
         if (msg.sender != requesterToRelayer[_requester])
             revert RequesterRelayerMismatch();
 
-        bytes32[] memory signatures = _airnodeSigs;
-        for (uint256 i = 0; i < signatures.length; ) {
-            if (signatures[i] == 0) revert SignatureMissing(i);
+        for (uint256 i = 0; i < _airnodeSigs.length; ) {
+            if (_airnodeSigs[i] == 0) revert SignatureMissing(i);
             unchecked {
                 ++i;
             }
         }
 
-        delete (requesterToRelayer[_requester]);
-        return (_randomNumber);
+        // forward random number to requester contract's applicable function
+        (bool success, ) = _requester.delegatecall(
+            abi.encodeWithSelector(
+                requesterToSelector[_requester],
+                _randomNumber
+            )
+        );
+        if (!success) revert RequesterCallFailed();
     }
 
     /// @notice for deployer to designate valid and active relayer addresses
@@ -115,5 +123,16 @@ contract Dqrng {
     function registerAccessNFT(address _airnode, address _nft) external {
         if (msg.sender != deployer) revert OnlyDeployer();
         airnodeToNFT[_airnode] = _nft;
+    }
+
+    /// @notice convenience function to get function selector for requester before requestDqrng
+    /// @param _function: requester's function to receive random number and any other arguments (but must include uint256), for example "receiveRandNum(uint256)"
+    /// @return bytes4 function selector for requester to pass in requestDqrng as _functionSelector
+    function getSelector(string calldata _function)
+        external
+        pure
+        returns (bytes4)
+    {
+        return bytes4(keccak256(bytes(_function)));
     }
 }
