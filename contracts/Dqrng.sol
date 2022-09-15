@@ -1,6 +1,5 @@
 //SPDX-License-Identifier: MIT
 /****
- ***** IN PROCESS AND INCOMPLETE
  *****
  ***** this code and any deployments of this code are strictly provided as-is;
  ***** no guarantee, representation or warranty is being made,
@@ -15,7 +14,7 @@ pragma solidity >=0.8.16;
 
 /// @title dQRNG
 /** @notice decentralized API for multi-source quantum random number */
-/** @dev uses API3 QRNG and access NFTs in requester address. Sponsor wallets handled by dQRNG client.
+/** @dev uses API3 QRNG and access NFTs in requester address to submit dQRNG request to relayer. Sponsor wallets handled by dQRNG client.
  ** requester specifies airnodes and relayer addresses. Currently, deployer specifies valid relayer and NFT addresses. */
 
 interface ERC721 {
@@ -48,7 +47,8 @@ contract Dqrng {
     }
 
     /// @notice request dQRNG via relayer, provided requester is holding necessary access NFTs (represent on-chain API key for each respective airnode address)
-    /// @dev each relayer listens for RelayerRequested events where it is specified as relayer
+    /// @dev each relayer listens for RelayerRequested events where it is specified as relayer (which also emits the corresponding requester address and airnodes)
+    /// requester can change specified airnodes, relayer, and recipient function selector with each call if desired
     /// @param _airnodes: array of requested QRNG airnode contract addresses, see https://docs.api3.org/qrng/providers.html
     /// @param _relayer: address which coordinates commit-reveal scheme using the airnode addresses and responds
     /// @param _functionSelector: requester contract function identifier which will ultimately receive the random number from fulfull()
