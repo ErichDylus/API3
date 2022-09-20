@@ -10,8 +10,8 @@
 pragma solidity >=0.8.16;
 
 /// @title Swap USDC and Burn API3
-/** @notice simple programmatic token burn per API3 whitepaper: uses AMM DEX to swap USDC held by this contract for API3 tokens; also has an option to
- *** LP half (redeemable to this contract after the lpWithdrawDelay provided in constructor), then burns all remaining API3 tokens via the token contract;
+/** @notice simple programmatic token burn of excess USDC revenue per API3 whitepaper: uses AMM DEX to swap half of USDC held by this contract for API3 tokens, half for ETH, to LP;
+ *** entire LP is redeemable to this contract after the `lpWithdrawDelay` provided in constructor, then burns all remaining API3 tokens via the token contract;
  *** also auto-swaps any ETH sent directly to this contract for API3 tokens, which are then burned via the token contract */
 
 interface IUniswapV2Router02 {
@@ -123,7 +123,7 @@ contract SwapUSDCAndBurnAPI3 {
         iLPToken.approve(SUSHI_ROUTER_ADDR, type(uint256).max);
     }
 
-    /// @notice receives ETH sent to address(this) except if from sushiRouter, swaps for API3 tokens, and calls _burnAPI3()
+    /// @notice receives ETH sent to address(this) except if from router, swaps for API3 tokens, and calls _burnAPI3()
     /// also useful for burning any leftover/dust API3 tokens held by or sent to this contract
     receive() external payable {
         if (msg.sender != SUSHI_ROUTER_ADDR) {
@@ -138,6 +138,7 @@ contract SwapUSDCAndBurnAPI3 {
     }
 
     /// @notice swaps USDC held by address(this) for API3 tokens via API3/ETH pair, then calls _burnAPI3(). Callable by anyone.
+    /// intended for after persistent sufficient liquidity is established
     function swapUSDCToAPI3AndBurn() external {
         uint256 usdcBal = iUSDCToken.balanceOf(address(this));
         if (usdcBal == 0) revert NoUSDCTokens();
@@ -157,7 +158,7 @@ contract SwapUSDCAndBurnAPI3 {
         _burnAPI3();
     }
 
-    /// @notice swaps USDC held by address(this) for ETH, swaps 3/4 of the ETH for API3 tokens, then calls _lpAndBurn(). Callable by anyone.
+    /// @notice swaps USDC held by address(this) for ETH, swaps 1/2 of the ETH for API3 tokens, then calls _lpApi3Eth(). Callable by anyone.
     function swapUSDCToAPI3AndLpAndBurn() external {
         uint256 usdcBal = iUSDCToken.balanceOf(address(this));
         if (usdcBal == 0) revert NoUSDCTokens();
@@ -168,10 +169,13 @@ contract SwapUSDCAndBurnAPI3 {
             payable(address(this)),
             block.timestamp
         );
-        sushiRouter.swapExactETHForTokens{
-            value: (address(this).balance * 3) / 4
-        }(0, _getPathForETHtoAPI3(), address(this), block.timestamp);
-        _lpAndBurn();
+        sushiRouter.swapExactETHForTokens{value: (address(this).balance / 2)}(
+            0,
+            _getPathForETHtoAPI3(),
+            address(this),
+            block.timestamp
+        );
+        _lpApi3Eth();
     }
 
     /** @dev checks earliest Liquidity struct to see if any LP tokens are redeemable,
@@ -218,20 +222,17 @@ contract SwapUSDCAndBurnAPI3 {
         emit API3Burned(api3Bal);
     }
 
-    /** @notice LPs the remaining ETH and 1/3 of the API3 tokens, and calls _burnAPI3().
-     ** Half of total USDC is burned via API3, other half is provided liquidity to API3/ETH pair */
-    /** @dev LP has 10% buffer. Liquidity locked for lpWithdrawDelay. To implement one-way liquidity,
-     ** insert "iLPToken.transfer(address(0), iLPToken.balanceOf(address(this)));" before _burnAPI3()
-     ** and remove redeemLP() and redeemSpecificLP() functions. */
-    function _lpAndBurn() internal {
+    /// @notice LPs the remaining ETH and API3 tokens to API3/ETH pair
+    /// @dev LP has 10% buffer. Liquidity locked for lpWithdrawDelay.
+    function _lpApi3Eth() internal {
         uint256 api3Bal = iAPI3Token.balanceOf(address(this));
         if (api3Bal == 0) revert NoAPI3Tokens();
         uint256 ethBal = address(this).balance;
         (, , uint256 liquidity) = sushiRouter.addLiquidityETH{value: ethBal}(
             API3_TOKEN_ADDR,
-            api3Bal / 3,
-            ((api3Bal * 3) / 10), // 90% of 1/3 of the api3Bal
-            ((ethBal * 9) / 10), // 90% of the ethBal, which should be approx. 1/3 of the api3Bal in value
+            api3Bal,
+            ((api3Bal * 9) / 10), // 90% of the api3Bal
+            ((ethBal * 9) / 10), // 90% of the ethBal
             payable(address(this)),
             block.timestamp
         );
@@ -243,7 +244,6 @@ contract SwapUSDCAndBurnAPI3 {
         unchecked {
             ++lpAddIndex;
         }
-        _burnAPI3();
     }
 
     /// @notice redeems the LP for the current index, swaps redeemed ETH for API3 tokens, and burns all API3 tokens
