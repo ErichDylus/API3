@@ -13,6 +13,7 @@ pragma solidity >=0.8.16;
 /** @notice simple programmatic token burn of excess USDC revenue per API3 whitepaper: uses AMM DEX to swap half of USDC held by this contract for API3 tokens, half for ETH, to LP;
  *** entire LP is redeemable to this contract after the `lpWithdrawDelay` provided in constructor, then burns all remaining API3 tokens via the token contract;
  *** also auto-swaps any ETH sent directly to this contract for API3 tokens, which are then burned via the token contract */
+/// @dev UniV2 router and LP token addresses provided in constructor 
 
 interface IUniswapV2Router02 {
     function addLiquidityETH(
@@ -82,18 +83,15 @@ contract SwapUSDCAndBurnAPI3 {
 
     address public constant API3_TOKEN_ADDR =
         0x0b38210ea11411557c13457D4dA7dC6ea731B88a;
-    address public constant LP_TOKEN_ADDR =
-        0xA8AEC03d5Cf2824fD984ee249493d6D4D6740E61;
-    address public constant SUSHI_ROUTER_ADDR =
-        0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F;
     address public constant USDC_TOKEN_ADDR =
         0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
     address public constant WETH_ADDR =
         0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
+    address public immutable routerAddr;
     uint256 public immutable lpWithdrawDelay;
 
-    IUniswapV2Router02 public sushiRouter;
+    IUniswapV2Router02 public v2Router;
     IAPI3 public iAPI3Token;
     IERC20 public iUSDCToken;
     IERC20 public iLPToken;
@@ -110,24 +108,31 @@ contract SwapUSDCAndBurnAPI3 {
     event LiquidityProvided(uint256 liquidityAdded, uint256 indexed lpIndex);
     event LiquidityRemoved(uint256 liquidityRemoved, uint256 indexed lpIndex);
 
+    /// @param _router: DEX UniV2 router address, i.e. 0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F for SushiSwap
+    /// @param _lpTokenAddr: LP token contract address for API3/ETH, i.e. 0xA8AEC03d5Cf2824fD984ee249493d6D4D6740E61 for SushiSwap
     /// @param _lpWithdrawDelay: delay (in seconds) before liquidity may be withdrawn, e.g. 31557600 for one year
-    constructor(uint256 _lpWithdrawDelay) payable {
+    constructor(
+        address _router,
+        address _lpTokenAddr,
+        uint256 _lpWithdrawDelay
+    ) payable {
         lpWithdrawDelay = _lpWithdrawDelay;
-        sushiRouter = IUniswapV2Router02(SUSHI_ROUTER_ADDR);
+        routerAddr = _router;
+        v2Router = IUniswapV2Router02(_router);
         iAPI3Token = IAPI3(API3_TOKEN_ADDR);
         iUSDCToken = IERC20(USDC_TOKEN_ADDR);
-        iLPToken = IERC20(LP_TOKEN_ADDR);
+        iLPToken = IERC20(_lpTokenAddr);
         iAPI3Token.updateBurnerStatus(true);
-        iAPI3Token.approve(SUSHI_ROUTER_ADDR, type(uint256).max);
-        iUSDCToken.approve(SUSHI_ROUTER_ADDR, type(uint256).max);
-        iLPToken.approve(SUSHI_ROUTER_ADDR, type(uint256).max);
+        iAPI3Token.approve(_router, type(uint256).max);
+        iUSDCToken.approve(_router, type(uint256).max);
+        iLPToken.approve(_router, type(uint256).max);
     }
 
     /// @notice receives ETH sent to address(this) except if from router, swaps for API3 tokens, and calls _burnAPI3()
     /// also useful for burning any leftover/dust API3 tokens held by or sent to this contract
     receive() external payable {
-        if (msg.sender != SUSHI_ROUTER_ADDR) {
-            sushiRouter.swapExactETHForTokens{value: msg.value}(
+        if (msg.sender != routerAddr) {
+            v2Router.swapExactETHForTokens{value: msg.value}(
                 1,
                 _getPathForETHtoAPI3(),
                 address(this),
@@ -142,14 +147,14 @@ contract SwapUSDCAndBurnAPI3 {
     function swapUSDCToAPI3AndBurn() external {
         uint256 usdcBal = iUSDCToken.balanceOf(address(this));
         if (usdcBal == 0) revert NoUSDCTokens();
-        sushiRouter.swapExactTokensForETH(
+        v2Router.swapExactTokensForETH(
             usdcBal,
             0,
             _getPathForUSDCtoETH(),
             payable(address(this)),
             block.timestamp
         );
-        sushiRouter.swapExactETHForTokens{value: (address(this).balance)}(
+        v2Router.swapExactETHForTokens{value: (address(this).balance)}(
             1,
             _getPathForETHtoAPI3(),
             address(this),
@@ -162,14 +167,14 @@ contract SwapUSDCAndBurnAPI3 {
     function swapUSDCToAPI3AndLpAndBurn() external {
         uint256 usdcBal = iUSDCToken.balanceOf(address(this));
         if (usdcBal == 0) revert NoUSDCTokens();
-        sushiRouter.swapExactTokensForETH(
+        v2Router.swapExactTokensForETH(
             usdcBal,
             0,
             _getPathForUSDCtoETH(),
             payable(address(this)),
             block.timestamp
         );
-        sushiRouter.swapExactETHForTokens{value: (address(this).balance / 2)}(
+        v2Router.swapExactETHForTokens{value: (address(this).balance / 2)}(
             0,
             _getPathForETHtoAPI3(),
             address(this),
@@ -228,7 +233,7 @@ contract SwapUSDCAndBurnAPI3 {
         uint256 api3Bal = iAPI3Token.balanceOf(address(this));
         if (api3Bal == 0) revert NoAPI3Tokens();
         uint256 ethBal = address(this).balance;
-        (, , uint256 liquidity) = sushiRouter.addLiquidityETH{value: ethBal}(
+        (, , uint256 liquidity) = v2Router.addLiquidityETH{value: ethBal}(
             API3_TOKEN_ADDR,
             api3Bal,
             ((api3Bal * 9) / 10), // 90% of the api3Bal
@@ -248,7 +253,7 @@ contract SwapUSDCAndBurnAPI3 {
 
     /// @notice redeems the LP for the current index, swaps redeemed ETH for API3 tokens, and burns all API3 tokens
     function _redeemLP(uint256 _redeemableLpTokens) internal {
-        sushiRouter.removeLiquidityETH(
+        v2Router.removeLiquidityETH(
             API3_TOKEN_ADDR,
             _redeemableLpTokens,
             0,
@@ -261,7 +266,7 @@ contract SwapUSDCAndBurnAPI3 {
         unchecked {
             ++lpRedeemIndex;
         }
-        sushiRouter.swapExactETHForTokens{value: address(this).balance}(
+        v2Router.swapExactETHForTokens{value: address(this).balance}(
             1,
             _getPathForETHtoAPI3(),
             address(this),
@@ -275,7 +280,7 @@ contract SwapUSDCAndBurnAPI3 {
         uint256 _redeemableLpTokens,
         uint256 _lpRedeemIndex
     ) internal {
-        sushiRouter.removeLiquidityETH(
+        v2Router.removeLiquidityETH(
             API3_TOKEN_ADDR,
             _redeemableLpTokens,
             0,
@@ -285,7 +290,7 @@ contract SwapUSDCAndBurnAPI3 {
         );
         delete liquidityAdds[_lpRedeemIndex];
         emit LiquidityRemoved(_redeemableLpTokens, _lpRedeemIndex);
-        sushiRouter.swapExactETHForTokens{value: address(this).balance}(
+        v2Router.swapExactETHForTokens{value: address(this).balance}(
             1,
             _getPathForETHtoAPI3(),
             address(this),
