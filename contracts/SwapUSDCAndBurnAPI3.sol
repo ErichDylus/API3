@@ -13,7 +13,8 @@ pragma solidity >=0.8.16;
 /** @notice simple programmatic token burn of excess USDC revenue per API3 whitepaper: uses AMM DEX to swap half of USDC held by this contract for API3 tokens, half for ETH, to LP;
  *** entire LP is redeemable to this contract after the `lpWithdrawDelay` provided in constructor, then burns all remaining API3 tokens via the token contract;
  *** also auto-swaps any ETH sent directly to this contract for API3 tokens, which are then burned via the token contract */
-/// @dev UniV2 router and LP token addresses provided in constructor 
+/// @dev UniV2 router and LP token addresses provided in constructor. In the event of ETH-API3 imbalance of this contract (causing _lpApi3Eth() to revert), 
+/// swapUSDCToAPI3AndBurn() may be called to swap all held USDC and ETH to API3, and burn all API3
 
 interface IUniswapV2Router02 {
     function addLiquidityETH(
@@ -85,7 +86,7 @@ contract SwapUSDCAndBurnAPI3 {
         0x0b38210ea11411557c13457D4dA7dC6ea731B88a;
     address public constant USDC_TOKEN_ADDR =
         0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    address public constant WETH_ADDR =
+    address public constant WETH_TOKEN_ADDR =
         0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
     address public immutable routerAddr;
@@ -108,8 +109,8 @@ contract SwapUSDCAndBurnAPI3 {
     event LiquidityProvided(uint256 liquidityAdded, uint256 indexed lpIndex);
     event LiquidityRemoved(uint256 liquidityRemoved, uint256 indexed lpIndex);
 
-    /// @param _router: DEX UniV2 router address, i.e. 0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F for SushiSwap
-    /// @param _lpTokenAddr: LP token contract address for API3/ETH, i.e. 0xA8AEC03d5Cf2824fD984ee249493d6D4D6740E61 for SushiSwap
+    /// @param _router: DEX UniV2 router address, e.g. 0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F for SushiSwap
+    /// @param _lpTokenAddr: LP token contract address for API3/ETH, e.g. 0xA8AEC03d5Cf2824fD984ee249493d6D4D6740E61 for SushiSwap
     /// @param _lpWithdrawDelay: delay (in seconds) before liquidity may be withdrawn, e.g. 31557600 for one year
     constructor(
         address _router,
@@ -302,7 +303,7 @@ contract SwapUSDCAndBurnAPI3 {
     /// @return path: the router path for ETH/API3 swap
     function _getPathForETHtoAPI3() internal pure returns (address[] memory) {
         address[] memory path = new address[](2);
-        path[0] = WETH_ADDR;
+        path[0] = WETH_TOKEN_ADDR;
         path[1] = API3_TOKEN_ADDR;
         return path;
     }
@@ -311,7 +312,7 @@ contract SwapUSDCAndBurnAPI3 {
     function _getPathForUSDCtoETH() internal pure returns (address[] memory) {
         address[] memory path = new address[](2);
         path[0] = USDC_TOKEN_ADDR;
-        path[1] = WETH_ADDR;
+        path[1] = WETH_TOKEN_ADDR;
         return path;
     }
 }
