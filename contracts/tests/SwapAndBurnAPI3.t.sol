@@ -71,7 +71,7 @@ contract SwapUSDCAndBurnAPI3Test is PRBTest {
     function checkETHpath() external {
         address[] memory testpath = new address[](2);
         testpath[0] = contracttest.USDC_TOKEN_ADDR();
-        testpath[1] = contracttest.WETH_ADDR();
+        testpath[1] = contracttest.WETH_TOKEN_ADDR();
         assertEq(
             testpath[0],
             0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48,
@@ -86,7 +86,7 @@ contract SwapUSDCAndBurnAPI3Test is PRBTest {
 
     function checkAPI3path() external {
         address[] memory testpath = new address[](2);
-        testpath[0] = contracttest.WETH_ADDR();
+        testpath[0] = contracttest.WETH_TOKEN_ADDR();
         testpath[1] = contracttest.API3_TOKEN_ADDR();
         assertEq(
             testpath[0],
