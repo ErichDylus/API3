@@ -7,9 +7,7 @@ pragma solidity >=0.8.16;
 /// @dev may be added to an API3 DAO revenue-producing contract in order to programmatically send USDC to the SwapUSDCAndBurnAPI3 contract and call its defined functions
 
 interface ISwapUSDCAndBurnAPI3 {
-    function swapUSDCToAPI3AndBurn() external;
-
-    function swapUSDCToAPI3AndLpAndBurn() external;
+    function swapUSDCToAPI3AndLpWithETHPair() external;
 
     function redeemLP() external;
 
