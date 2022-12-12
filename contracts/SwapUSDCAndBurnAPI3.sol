@@ -81,8 +81,8 @@ interface IERC20 {
 
 contract SwapUSDCAndBurnAPI3 {
     struct Liquidity {
-        uint32 withdrawTime;
-        uint224 amount;
+        uint256 withdrawTime;
+        uint256 amount;
     }
 
     address public constant API3_TOKEN_ADDR =
@@ -115,8 +115,8 @@ contract SwapUSDCAndBurnAPI3 {
         address uniRouter = UNI_ROUTER_ADDR;
         router = IUniswapV2Router02(uniRouter);
         iAPI3Token = IAPI3(API3_TOKEN_ADDR);
-        iAPI3Token.updateBurnerStatus(true);
-        iAPI3Token.approve(uniRouter, type(uint256).max);
+        IAPI3(API3_TOKEN_ADDR).updateBurnerStatus(true);
+        IAPI3(API3_TOKEN_ADDR).approve(uniRouter, type(uint256).max);
         IERC20(USDC_TOKEN_ADDR).approve(uniRouter, type(uint256).max);
         IERC20(LP_TOKEN_ADDR).approve(uniRouter, type(uint256).max);
     }
@@ -158,12 +158,9 @@ contract SwapUSDCAndBurnAPI3 {
      ** then deletes that mapped struct in liquidityAdds[] and increments the lpRedeemIndex */
     /// @notice redeems the earliest available liquidity; redeemed API3 tokens are burned and redeemed ETH is converted to API3 tokens and burned
     function redeemLP() external {
-        if (
-            uint256(liquidityAdds[lpRedeemIndex].withdrawTime) > block.timestamp
-        ) revert NoRedeemableLPTokens();
-        uint256 _redeemableLpTokens = uint256(
-            liquidityAdds[lpRedeemIndex].amount
-        );
+        if (liquidityAdds[lpRedeemIndex].withdrawTime > block.timestamp)
+            revert NoRedeemableLPTokens();
+        uint256 _redeemableLpTokens = liquidityAdds[lpRedeemIndex].amount;
         if (_redeemableLpTokens == 0) {
             delete liquidityAdds[lpRedeemIndex];
             unchecked {
@@ -180,13 +177,9 @@ contract SwapUSDCAndBurnAPI3 {
     /// @notice redeems specifically indexed liquidity; redeemed API3 tokens are burned and redeemed ETH is converted to API3 tokens and burned
     /// @param _lpRedeemIndex: index of liquidity in liquidityAdds[] mapping to be redeemed
     function redeemSpecificLP(uint256 _lpRedeemIndex) external {
-        if (
-            uint256(liquidityAdds[_lpRedeemIndex].withdrawTime) >
-            block.timestamp
-        ) revert NoRedeemableLPTokens();
-        uint256 _redeemableLpTokens = uint256(
-            liquidityAdds[_lpRedeemIndex].amount
-        );
+        if (liquidityAdds[_lpRedeemIndex].withdrawTime > block.timestamp)
+            revert NoRedeemableLPTokens();
+        uint256 _redeemableLpTokens = liquidityAdds[_lpRedeemIndex].amount;
         if (_redeemableLpTokens == 0) {
             delete liquidityAdds[_lpRedeemIndex];
         } else {
@@ -217,11 +210,11 @@ contract SwapUSDCAndBurnAPI3 {
             block.timestamp
         );
         emit LiquidityProvided(liquidity, lpAddIndex);
-        liquidityAdds[lpAddIndex] = Liquidity(
-            uint32(block.timestamp + 31557600),
-            uint224(liquidity)
-        );
         unchecked {
+            liquidityAdds[lpAddIndex] = Liquidity(
+                block.timestamp + 31557600, // will not overflow on human timelines
+                liquidity
+            );
             ++lpAddIndex;
         }
     }
