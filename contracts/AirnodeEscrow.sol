@@ -4,7 +4,7 @@
  ***** or any smart contracts or other software deployed from these files, in accordance with the disclosures and licenses found here: https://github.com/ErichDylus/API3/blob/main/contracts/README.md
  ***** this code is not audited, and users, developers, or adapters of these files should proceed with caution and use at their own risk.
  ****/
-pragma solidity >=0.8.9;
+pragma solidity >=0.8.12;
 
 /// @title Airnode Escrow
 /// @notice bilateral smart escrow contract, with an ERC20 stablecoin as payment, expiration denominated in seconds, deposit refunded if contract expires before closeDeal() called, contingent on valid Airnode response as parameterized in _closeDeal()
@@ -29,17 +29,18 @@ interface IERC20 {
 }
 
 contract AirnodeEscrow is RrpRequesterV0 {
-    address buyer;
+    address immutable buyer;
+    uint256 immutable price;
+    uint256 immutable expiryTime;
+
     address seller;
-    uint256 deposit;
-    uint256 expiryTime;
     bool sellerApproved;
     bool buyerApproved;
     bool isExpired;
     bool isClosed;
     IERC20 public ierc20;
     string description;
-    mapping(address => bool) public parties; //map whether an address is a party to the transaction for restricted() modifier
+    mapping(address => bool) public parties; //map whether an address is a party to the transaction
     mapping(bytes32 => bool) public incomingFulfillments;
     mapping(bytes32 => int256) public fulfilledData;
 
@@ -48,33 +49,35 @@ contract AirnodeEscrow is RrpRequesterV0 {
 
     error BuyerAddress();
     error Expired(uint256 time);
+    error NoRequest();
     error NotApproved();
+    error NotAParty();
     error OnlyBuyer();
     error OracleConditionNotSatisfied();
 
-    modifier restricted() {
-        require(parties[msg.sender], "Only parties[]");
+    modifier onlyParties() {
+        if (!parties[msg.sender]) revert NotAParty();
         _;
     }
 
-    /// @notice deployer (buyer) initiates escrow with description, deposit amount in USD, address of stablecoin, seconds until expiry, and designate recipient seller
+    /// @notice deployer (buyer) initiates escrow with description, price amount in USD, address of stablecoin, seconds until expiry, and designate recipient seller
     /// @param _description should be a brief identifier of the deal in question - perhaps as to parties/underlying asset/documentation reference/hash
-    /// @param _deposit is the purchase price which will be deposited in the smart escrow contract
+    /// @param _price is the purchase price which will be deposited in the smart escrow contract
     /// @param _seller is the seller's address, who will receive the purchase price if the deal closes
-    /// @param _stablecoin is the token contract address for the stablecoin to be sent as deposit
+    /// @param _stablecoin is the token contract address for the stablecoin to be sent as deposited price
     /// @param _secsUntilExpiry is the number of seconds until the deal expires, which can be converted to days for front end input or the code can be adapted accordingly
     /// @param _airnodeRrp is the public address of the AirnodeRrp.sol protocol contract on the relevant blockchain used for this contract; see: https://docs.api3.org/airnode/v0.2/reference/airnode-addresses.html
     constructor(
         string memory _description,
-        uint256 _deposit,
+        uint256 _price,
         uint256 _secsUntilExpiry,
         address _seller,
         address _stablecoin,
         address _airnodeRrp
     ) RrpRequesterV0(_airnodeRrp) {
         if (_seller == msg.sender) revert BuyerAddress();
-        buyer = address(msg.sender);
-        deposit = _deposit;
+        buyer = msg.sender;
+        price = _price;
         ierc20 = IERC20(_stablecoin);
         description = _description;
         seller = _seller;
@@ -86,7 +89,7 @@ contract AirnodeEscrow is RrpRequesterV0 {
 
     /// @notice buyer may confirm seller's recipient address as extra security measure or change seller address
     /// @param _seller is the new recipient address of seller
-    function designateSeller(address _seller) external restricted {
+    function designateSeller(address _seller) external onlyParties {
         if (_seller == buyer) revert BuyerAddress();
         if (isExpired) revert Expired(block.timestamp);
         parties[_seller] = true;
@@ -94,22 +97,10 @@ contract AirnodeEscrow is RrpRequesterV0 {
     }
 
     /// ********* DEPLOYER MUST SEPARATELY APPROVE (by interacting with the ERC20 contract in question's approve()) this contract address for the deposit amount (keep decimals in mind) ********
-    /// @notice buyer deposits in address(this) after separately ERC20-approving address(this)
+    /// @notice buyer deposits 'price' in address(this) after separately ERC20-approving address(this)
     function depositInEscrow() external returns (bool, uint256) {
         if (msg.sender != buyer) revert OnlyBuyer();
-        ierc20.transferFrom(buyer, address(this), deposit);
-        return (true, ierc20.balanceOf(address(this)));
-    }
-
-    /// @notice address(this) returns deposit to buyer
-    function _returnDeposit() private returns (bool, uint256) {
-        ierc20.transfer(buyer, deposit);
-        return (true, ierc20.balanceOf(address(this)));
-    }
-
-    /// @notice address(this) sends deposit to seller
-    function _paySeller() private returns (bool, uint256) {
-        ierc20.transfer(seller, deposit);
+        ierc20.transferFrom(buyer, address(this), price);
         return (true, ierc20.balanceOf(address(this)));
     }
 
@@ -125,22 +116,19 @@ contract AirnodeEscrow is RrpRequesterV0 {
         return (isExpired);
     }
 
-    /// @notice for seller to check if deposit is in address(this)
-    function checkEscrow() external view restricted returns (uint256) {
+    /// @notice for seller to check if price is in address(this)
+    function checkEscrow() external view returns (uint256) {
         return ierc20.balanceOf(address(this));
     }
 
     /// if buyer wishes to initiate dispute over seller breach of off chain agreement or repudiate, simply may wait for expiration without sending deposit nor calling this function
-    function readyToClose() external restricted returns (string memory) {
+    function readyToClose() external onlyParties returns (bool, bool) {
         if (msg.sender == seller) {
             sellerApproved = true;
-            return ("Seller ready to close.");
         } else if (msg.sender == buyer) {
             buyerApproved = true;
-            return ("Buyer ready to close.");
-        } else {
-            return ("Neither buyer nor seller.");
         }
+        return (sellerApproved, buyerApproved);
     }
 
     /// @notice call the applicable airnode when ready to close
@@ -178,7 +166,7 @@ contract AirnodeEscrow is RrpRequesterV0 {
         external
         onlyAirnodeRrp
     {
-        require(incomingFulfillments[requestId], "No Request");
+        if (!incomingFulfillments[requestId]) revert NoRequest();
         delete incomingFulfillments[requestId];
         int256 _decodedData = abi.decode(data, (int256));
         fulfilledData[requestId] = _decodedData;
@@ -188,7 +176,7 @@ contract AirnodeEscrow is RrpRequesterV0 {
     /// @notice checks if both buyer and seller are ready to close and expiration has not been met; if so, address(this) closes deal and pays seller; if not, deposit returned to buyer
     /// @dev if properly closes, emits event with effective time of closing. This function is private to prevent external submission of valid _decodedData to trigger closing.
     /// @param _decodedData airnode response passed by fulfill()
-    function _closeDeal(int256 _decodedData) private returns (bool) {
+    function _closeDeal(int256 _decodedData) internal returns (bool) {
         if (_decodedData <= 0) revert OracleConditionNotSatisfied(); //change this condition for applicable triggering data/params/range etc. from Airnode
         if (expiryTime <= block.timestamp) {
             isExpired = true;
@@ -196,9 +184,15 @@ contract AirnodeEscrow is RrpRequesterV0 {
             emit DealExpired(true);
         } else {
             isClosed = true;
-            _paySeller();
+            ierc20.transfer(seller, price);
             emit DealClosed(true, block.timestamp); // confirmation of deal closing and effective time upon payment to seller
         }
         return (isClosed);
+    }
+
+    /// @notice address(this) returns 'price' to buyer
+    function _returnDeposit() private returns (bool, uint256) {
+        ierc20.transfer(buyer, price);
+        return (true, ierc20.balanceOf(address(this)));
     }
 }
