@@ -6,9 +6,9 @@ import "src/API3DAORevenueIncinerator.sol";
 
 /// @notice foundry framework testing of OSS_Tech's contract provided here: https://forum.api3.org/t/api3-dao-revenue-incinerator/1781/7
 /** @dev test using mainnet fork due to internal constants in contract being tested, and relevant liquidity conditions, example commands:
-*** forge test -vvvv --fork-url https://eth.llamarpc.com
-*** forge test -vvvv --fork-url https://eth-mainnet.gateway.pokt.network/v1/5f3453978e354ab992c4da79
-*** or see https://ethereumnodes.com/ for alternatives */
+ *** forge test -vvvv --fork-url https://eth.llamarpc.com
+ *** forge test -vvvv --fork-url https://eth-mainnet.gateway.pokt.network/v1/5f3453978e354ab992c4da79
+ *** or see https://ethereumnodes.com/ for alternatives */
 
 /// @notice test contract for API3DAORevenueIncinerator using Foundry
 contract API3DAORevenueIncineratorTest is Test {
@@ -38,11 +38,16 @@ contract API3DAORevenueIncineratorTest is Test {
         );
     }
 
-    function testReceive() public payable {
-        vm.deal(address(this), 1 ether);
+    /// @param weiAmount: amount of wei to be sent to 'receive()' in incinerator
+    /// @dev maximum constraint on weiAmount is 1e20 for now (100 ETH)
+    function testReceive(uint256 weiAmount) public payable {
+        // assume 'weiAmount' is nonzero, as otherwise 'receive()' will not be invoked anyway
+        vm.assume(weiAmount > 0);
+        vm.assume(weiAmount < 1e20);
+        vm.deal(address(this), weiAmount);
 
-        (bool sent, ) = address(incinerator).call{value: 1 ether}("");
-        require(sent, "Failed to send Ether");
+        (bool sent, ) = address(incinerator).call{value: weiAmount}("");
+        if (!sent) revert SendETH();
     }
 
     /// @notice test the swapUSDCToAPI3AndLpWithETHPair function with varying amounts of USDC
