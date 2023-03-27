@@ -5,7 +5,7 @@ import "forge-std/Test.sol";
 import "src/API3DAORevenueIncinerator.sol";
 
 /// @notice foundry framework testing of OSS_Tech's contract provided here: https://forum.api3.org/t/api3-dao-revenue-incinerator/1781/7
-/** @dev test using mainnet fork due to internal constants in contract being tested, and relevant liquidity conditions, example commands:
+/** @dev test using mainnet fork in order to use actual live relevant liquidity conditions for the Uniswap v2 pairs of API3-ETH and ETH-USDC, example commands:
  *** forge test -vvvv --fork-url https://eth.llamarpc.com
  *** forge test -vvvv --fork-url https://eth-mainnet.gateway.pokt.network/v1/5f3453978e354ab992c4da79
  *** or see https://ethereumnodes.com/ for alternatives */
@@ -14,12 +14,16 @@ import "src/API3DAORevenueIncinerator.sol";
 contract API3DAORevenueIncineratorTest is Test {
     API3DAORevenueIncinerator public incinerator;
 
-    // these variables are internal in 'API3DAORevenueIncinerator"
-    address internal constant USDC_TOKEN =
+    /// @dev these variables are internal in 'API3DAORevenueIncinerator', so they've been repeated here
+    address internal constant API3_TOKEN_ADDR =
+        0x0b38210ea11411557c13457D4dA7dC6ea731B88a;
+    address internal constant UNI_ROUTER_ADDR =
+        0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D;
+    address internal constant USDC_TOKEN_ADDR =
         0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    uint256 internal constant YEAR_SECONDS = 31557600;
+    uint256 internal constant YEAR_IN_SECONDS = 31557600;
 
-    error SendETH();
+    error EthCallFailed();
 
     function setUp() public {
         incinerator = new API3DAORevenueIncinerator();
@@ -28,16 +32,17 @@ contract API3DAORevenueIncineratorTest is Test {
     function testConstructor() public {
         assertEq(
             address(incinerator.router()),
-            0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D,
+            UNI_ROUTER_ADDR,
             "router address did not initialize"
         );
         assertEq(
             address(incinerator.iAPI3Token()),
-            0x0b38210ea11411557c13457D4dA7dC6ea731B88a,
+            API3_TOKEN_ADDR,
             "API3 token address did not initialize"
         );
     }
 
+    /// @notice test the 'receive()' function, fuzzing amount of wei sent
     /// @param weiAmount: amount of wei to be sent to 'receive()' in incinerator
     /// @dev maximum constraint on weiAmount is 1e20 for now (100 ETH)
     function testReceive(uint256 weiAmount) public payable {
@@ -47,13 +52,14 @@ contract API3DAORevenueIncineratorTest is Test {
         vm.deal(address(this), weiAmount);
 
         (bool sent, ) = address(incinerator).call{value: weiAmount}("");
-        if (!sent) revert SendETH();
+        if (!sent) revert EthCallFailed();
     }
 
-    /// @notice test the swapUSDCToAPI3AndLpWithETHPair function with varying amounts of USDC
+    /// @notice test the 'swapUSDCToAPI3AndLpWithETHPair()' function, fuzzing amounts of USDC
     /// @param usdcBalance: amount of USDC to give to the incinerator to test 'swapUSDCToAPI3AndLpWithETHPair()', fuzz
     function testSwapUSDCtoAPI3AndLPWithETHPair(uint256 usdcBalance) public {
-        // assume an amount of USDC that is low enough for the current amount of liquidity (greater than 1 but less than 10,000, incl. 6 USDC decimals)
+        /// assume an amount of USDC that is low enough for the current amount of liquidity (greater than 1 but less than 10,000, incl. 6 USDC decimals)
+        /// @dev we know too high of a USDC amount in a swap will revert due to slippage so we assume a < 10000 'usdcBalance'; this threshold will increase over time as liquidity increases
         vm.assume(usdcBalance > 1e6);
         vm.assume(usdcBalance < 1e10);
 
@@ -61,12 +67,12 @@ contract API3DAORevenueIncineratorTest is Test {
         vm.prank(address(1));
         vm.deal(address(1), 10000 ether);
 
-        // deal 'usdcBalance' amount of USDC to the incinerator
-        deal(USDC_TOKEN, address(incinerator), usdcBalance, false);
+        // mint 'usdcBalance' amount of USDC to the incinerator
+        deal(USDC_TOKEN_ADDR, address(incinerator), usdcBalance, false);
 
         // store to test index increment and _withdrawTime later
         uint256 _index = incinerator.lpAddIndex();
-        uint256 _deadline = (block.timestamp + YEAR_SECONDS) - 1;
+        uint256 _deadline = (block.timestamp + YEAR_IN_SECONDS) - 1;
 
         // call 'swapUSDCToAPI3AndLpWithETHPair()'
         incinerator.swapUSDCToAPI3AndLpWithETHPair{gas: gasleft()}();
@@ -85,9 +91,15 @@ contract API3DAORevenueIncineratorTest is Test {
             _deadline,
             "withdraw time should be at least a year from block.timestamp"
         );
+        // all USDC tokens in the incinerator should have been swapped
+        assertEq(
+            IERC20(USDC_TOKEN_ADDR).balanceOf(address(incinerator)),
+            0,
+            "Not all USDC tokens were swapped"
+        );
     }
 
-    /// @notice test the 'swapFractionUSDCToAPI3AndLpWithETHPair()' function with varying amounts of USDC and varying divisors
+    /// @notice test the 'swapFractionUSDCToAPI3AndLpWithETHPair()' function, fuzzing amounts of USDC and divisors
     /// @param usdcBalance: amount of USDC to give to the incinerator to test 'swapUSDCToAPI3AndLpWithETHPair()', fuzz
     /// @param divisor divisor for division operation of this contract's USDC balance to then swap and LP, which must be > 0.
     function testswapFractionUSDCToAPI3AndLpWithETHPair(
@@ -95,6 +107,7 @@ contract API3DAORevenueIncineratorTest is Test {
         uint256 divisor
     ) public {
         // assume an amount of USDC that is low enough for the current amount of liquidity (greater than 1 but less than 10,000, incl. 6 USDC decimals)
+        /// @dev we know too high of a USDC amount in a swap will revert due to slippage so we assume a < 10000 'usdcBalance'; this threshold will increase over time as liquidity increases
         vm.assume(usdcBalance > 1e6);
         vm.assume(usdcBalance < 1e10);
 
@@ -102,12 +115,12 @@ contract API3DAORevenueIncineratorTest is Test {
         vm.prank(address(1));
         vm.deal(address(1), 10000 ether);
 
-        // deal 'usdcBalance' amount of USDC to the incinerator
-        deal(USDC_TOKEN, address(incinerator), usdcBalance, false);
+        // mint 'usdcBalance' amount of USDC to the incinerator
+        deal(USDC_TOKEN_ADDR, address(incinerator), usdcBalance, false);
 
         // store to test index increment and '_withdrawTime' later
         uint256 _index = incinerator.lpAddIndex();
-        uint256 _deadline = (block.timestamp + YEAR_SECONDS) - 1;
+        uint256 _deadline = (block.timestamp + YEAR_IN_SECONDS) - 1;
         bool _revert;
 
         // expect revert if 'divisor' == 0 or if 'usdcBalance' is < 'divisor', as this will result in a swap amount of 0
@@ -149,19 +162,26 @@ contract API3DAORevenueIncineratorTest is Test {
         incinerator.redeemLP();
 
         // set block.timestamp to a year and a second from now to test redeem
-        vm.warp(block.timestamp + YEAR_SECONDS + 1);
+        vm.warp(block.timestamp + YEAR_IN_SECONDS + 1);
 
         incinerator.redeemLP();
 
-        //regardless of whether there were redeemable LP tokens, the 'lpRedeemIndex' should increment
+        // regardless of whether there were redeemable LP tokens, the 'lpRedeemIndex' should increment
         assertGt(
             incinerator.lpRedeemIndex(),
             _currentLpRedeemIndex,
             "lpRedeemIndex did not increment"
         );
+        // all API3 tokens in the incinerator should be burned via the call to '_burnAPI3()'
+        assertEq(
+            IERC20(API3_TOKEN_ADDR).balanceOf(address(incinerator)),
+            0,
+            "Not all API3 tokens were burned"
+        );
     }
 
-    /// @notice test the 'redeemSpecificLP()' function which attempts to redeem the LP tokens corresponding to the passed 'lpRedeemIndex' parameter; if no tokens to be redeemed, deletes the 'liquidityAdds' mapping
+    /// @notice test the 'redeemSpecificLP()' function, fuzzing 'lpRedeemIndex'
+    /// @dev attempts to redeem the LP tokens corresponding to the passed 'lpRedeemIndex' parameter; if no tokens to be redeemed, deletes the 'liquidityAdds' mapping
     /// @param lpRedeemIndex: index of liquidity in liquidityAdds[] mapping to be redeemed
     function testredeemSpecificLP(uint256 lpRedeemIndex) public {
         (uint256 _withdrawTime, ) = incinerator.liquidityAdds(lpRedeemIndex);
@@ -171,7 +191,7 @@ contract API3DAORevenueIncineratorTest is Test {
         incinerator.redeemSpecificLP(lpRedeemIndex);
 
         // set block.timestamp to a year and a second from now to test redeem
-        vm.warp(block.timestamp + YEAR_SECONDS + 1);
+        vm.warp(block.timestamp + YEAR_IN_SECONDS + 1);
 
         incinerator.redeemSpecificLP(lpRedeemIndex);
 
@@ -183,6 +203,12 @@ contract API3DAORevenueIncineratorTest is Test {
             _updatedWithdrawTime,
             0,
             "liquidityAdds mapping for 'lpRedeemIndex' was not deleted"
+        );
+        // all API3 tokens in the incinerator should be burned via the call to '_burnAPI3()'
+        assertEq(
+            IERC20(API3_TOKEN_ADDR).balanceOf(address(incinerator)),
+            0,
+            "Not all API3 tokens were burned"
         );
     }
 }
