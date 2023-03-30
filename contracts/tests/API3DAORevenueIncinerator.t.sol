@@ -10,6 +10,14 @@ import "src/API3DAORevenueIncinerator.sol";
  *** forge test -vvvv --fork-url https://eth-mainnet.gateway.pokt.network/v1/5f3453978e354ab992c4da79
  *** or see https://ethereumnodes.com/ for alternatives */
 
+/// @dev for allowance tests
+interface IERC20Token {
+    function allowance(
+        address owner,
+        address spender
+    ) external returns (uint256);
+}
+
 /// @notice test contract for API3DAORevenueIncinerator using Foundry
 contract API3DAORevenueIncineratorTest is Test {
     API3DAORevenueIncinerator public incinerator;
@@ -17,6 +25,8 @@ contract API3DAORevenueIncineratorTest is Test {
     /// @dev these variables are internal in 'API3DAORevenueIncinerator', so they've been repeated here
     address internal constant API3_TOKEN_ADDR =
         0x0b38210ea11411557c13457D4dA7dC6ea731B88a;
+    address internal constant LP_TOKEN_ADDR =
+        0x4Dd26482738bE6C06C31467a19dcdA9AD781e8C4;
     address internal constant UNI_ROUTER_ADDR =
         0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D;
     address internal constant USDC_TOKEN_ADDR =
@@ -40,6 +50,30 @@ contract API3DAORevenueIncineratorTest is Test {
             API3_TOKEN_ADDR,
             "API3 token address did not initialize"
         );
+        assertEq(
+            IERC20Token(API3_TOKEN_ADDR).allowance(
+                address(incinerator),
+                UNI_ROUTER_ADDR
+            ),
+            type(uint256).max,
+            "API3 approval failed"
+        );
+        assertEq(
+            IERC20Token(USDC_TOKEN_ADDR).allowance(
+                address(incinerator),
+                UNI_ROUTER_ADDR
+            ),
+            type(uint256).max,
+            "USDC approval failed"
+        );
+        assertEq(
+            IERC20Token(LP_TOKEN_ADDR).allowance(
+                address(incinerator),
+                UNI_ROUTER_ADDR
+            ),
+            type(uint256).max,
+            "LP approval failed"
+        );
     }
 
     /// @notice test the 'receive()' function, fuzzing amount of wei sent
@@ -53,14 +87,26 @@ contract API3DAORevenueIncineratorTest is Test {
 
         (bool sent, ) = address(incinerator).call{value: weiAmount}("");
         if (!sent) revert EthCallFailed();
+
+        // all msg.value should have been swapped to API3 tokens
+        assertEq(
+            address(incinerator).balance,
+            0,
+            "Not all ETH was swapped to API3"
+        );
+        // all API3 tokens in the incinerator should be burned via the call to '_burnAPI3()'
+        assertEq(
+            IERC20(API3_TOKEN_ADDR).balanceOf(address(incinerator)),
+            0,
+            "Not all API3 tokens were burned"
+        );
     }
 
     /// @notice test the 'swapUSDCToAPI3AndLpWithETHPair()' function, fuzzing amounts of USDC
     /// @param usdcBalance: amount of USDC to give to the incinerator to test 'swapUSDCToAPI3AndLpWithETHPair()', fuzz
     function testSwapUSDCtoAPI3AndLPWithETHPair(uint256 usdcBalance) public {
-        /// assume an amount of USDC that is low enough for the current amount of liquidity (greater than 1 but less than 10,000, incl. 6 USDC decimals)
+        /// assume an amount of USDC that is low enough for the current amount of liquidity (less than 10,000, incl. 6 USDC decimals)
         /// @dev we know too high of a USDC amount in a swap will revert due to slippage so we assume a < 10000 'usdcBalance'; this threshold will increase over time as liquidity increases
-        vm.assume(usdcBalance > 1e6);
         vm.assume(usdcBalance < 1e10);
 
         // don't run out of gas
@@ -70,33 +116,41 @@ contract API3DAORevenueIncineratorTest is Test {
         // mint 'usdcBalance' amount of USDC to the incinerator
         deal(USDC_TOKEN_ADDR, address(incinerator), usdcBalance, false);
 
-        // store to test index increment and _withdrawTime later
+        // store to test index increment and _withdrawTime later, and '_revert' to only access test assert statements if the incinerator call does not revert
         uint256 _index = incinerator.lpAddIndex();
         uint256 _deadline = (block.timestamp + YEAR_IN_SECONDS) - 1;
+        bool _revert;
+
+        // expect a revert if usdcBalance == 0
+        if (IERC20(USDC_TOKEN_ADDR).balanceOf(address(incinerator)) == 0) {
+            _revert = true;
+            vm.expectRevert();
+        }
 
         // call 'swapUSDCToAPI3AndLpWithETHPair()'
         incinerator.swapUSDCToAPI3AndLpWithETHPair{gas: gasleft()}();
 
-        (uint256 _withdrawTime, uint256 _amount) = incinerator.liquidityAdds(
-            _index
-        );
-        assertGt(_amount, 0, "add liquidity amount should be > 0");
-        assertGt(
-            incinerator.lpAddIndex(),
-            _index,
-            "lpAddIndex did not increment"
-        );
-        assertGt(
-            _withdrawTime,
-            _deadline,
-            "withdraw time should be at least a year from block.timestamp"
-        );
-        // all USDC tokens in the incinerator should have been swapped
-        assertEq(
-            IERC20(USDC_TOKEN_ADDR).balanceOf(address(incinerator)),
-            0,
-            "Not all USDC tokens were swapped"
-        );
+        if (!_revert) {
+            (uint256 _withdrawTime, uint256 _amount) = incinerator
+                .liquidityAdds(_index);
+            assertGt(_amount, 0, "add liquidity amount should be > 0");
+            assertGt(
+                incinerator.lpAddIndex(),
+                _index,
+                "lpAddIndex did not increment"
+            );
+            assertGt(
+                _withdrawTime,
+                _deadline,
+                "withdraw time should be at least a year from block.timestamp"
+            );
+            // all USDC tokens in the incinerator should have been swapped
+            assertEq(
+                IERC20(USDC_TOKEN_ADDR).balanceOf(address(incinerator)),
+                0,
+                "Not all USDC tokens were swapped"
+            );
+        }
     }
 
     /// @notice test the 'swapFractionUSDCToAPI3AndLpWithETHPair()' function, fuzzing amounts of USDC and divisors
@@ -106,9 +160,8 @@ contract API3DAORevenueIncineratorTest is Test {
         uint256 usdcBalance,
         uint256 divisor
     ) public {
-        // assume an amount of USDC that is low enough for the current amount of liquidity (greater than 1 but less than 10,000, incl. 6 USDC decimals)
+        // assume an amount of USDC that is low enough for the current amount of liquidity (less than 10,000, incl. 6 USDC decimals)
         /// @dev we know too high of a USDC amount in a swap will revert due to slippage so we assume a < 10000 'usdcBalance'; this threshold will increase over time as liquidity increases
-        vm.assume(usdcBalance > 1e6);
         vm.assume(usdcBalance < 1e10);
 
         // don't run out of gas
@@ -118,13 +171,22 @@ contract API3DAORevenueIncineratorTest is Test {
         // mint 'usdcBalance' amount of USDC to the incinerator
         deal(USDC_TOKEN_ADDR, address(incinerator), usdcBalance, false);
 
-        // store to test index increment and '_withdrawTime' later
+        // store to test index increment and '_withdrawTime' later, and '_revert' to only access test assert statements if the incinerator call does not revert
         uint256 _index = incinerator.lpAddIndex();
         uint256 _deadline = (block.timestamp + YEAR_IN_SECONDS) - 1;
         bool _revert;
+        uint256 _swapAmount;
+        if (divisor > 0)
+            _swapAmount =
+                IERC20(USDC_TOKEN_ADDR).balanceOf(address(incinerator)) /
+                divisor;
 
         // expect revert if 'divisor' == 0 or if 'usdcBalance' is < 'divisor', as this will result in a swap amount of 0
-        if (divisor == 0 || (usdcBalance / divisor) == 0) {
+        if (
+            divisor == 0 ||
+            IERC20(USDC_TOKEN_ADDR).balanceOf(address(incinerator)) == 0 ||
+            _swapAmount == 0
+        ) {
             _revert = true;
             vm.expectRevert();
         }
@@ -146,6 +208,12 @@ contract API3DAORevenueIncineratorTest is Test {
                 _withdrawTime,
                 _deadline,
                 "withdraw time should be at least a year from block.timestamp"
+            );
+            // post-swap balance of USDC in the incinerator should equal the starting balance minus (usdcBalance / divisor), which is the '_swapAmount'
+            assertEq(
+                usdcBalance - _swapAmount,
+                IERC20(USDC_TOKEN_ADDR).balanceOf(address(incinerator)),
+                "USDC balance post-call should equal the start balance minus the _swapAmount"
             );
         }
     }
@@ -171,6 +239,12 @@ contract API3DAORevenueIncineratorTest is Test {
             incinerator.lpRedeemIndex(),
             _currentLpRedeemIndex,
             "lpRedeemIndex did not increment"
+        );
+        // all ETH in the incinerator should have been swapped to API3 tokens
+        assertEq(
+            address(incinerator).balance,
+            0,
+            "Not all ETH was swapped to API3"
         );
         // all API3 tokens in the incinerator should be burned via the call to '_burnAPI3()'
         assertEq(
@@ -203,6 +277,12 @@ contract API3DAORevenueIncineratorTest is Test {
             _updatedWithdrawTime,
             0,
             "liquidityAdds mapping for 'lpRedeemIndex' was not deleted"
+        );
+        // all ETH in the incinerator should have been swapped to API3 tokens
+        assertEq(
+            address(incinerator).balance,
+            0,
+            "Not all ETH was swapped to API3"
         );
         // all API3 tokens in the incinerator should be burned via the call to '_burnAPI3()'
         assertEq(
