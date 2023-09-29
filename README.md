@@ -1,12 +1,12 @@
 <p align="center">
   <a href="https://api3.org/">
-    <img src="https://api3.org/img/logo.png" alt="API3Logo" width="200" />
+    <img src="https://api3.org/_astro/logo-2.f65b1200.png" alt="API3Logo" width="200" />
   </a>
  <br>
  <br>
   
   
-API3 DAO-related materials, writings, forms, smart contracts, interfaces, posts, etc.
+API3-related materials, writings, forms, smart contracts, interfaces, posts, etc.
 
 Unless otherwise specified, my [autonomous attorney disclosure](https://github.com/ErichDylus/Open-Source-Law/blob/main/Disclosure.md) applies to everything in this repository.
 
