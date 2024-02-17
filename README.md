@@ -15,6 +15,8 @@ Unless otherwise specified, my [autonomous attorney disclosure](https://github.c
   
 **Articles**
   
+ - [Oracle Enhanced Value](https://medium.com/@erich.dylus/oracle-enhanced-value-ffcc62e94cc5)
+ 
  - [Status of API3 Stakers, Grantees, and Multisigs](https://forum.api3.org/t/status-of-api3-dao-stakers-grantees-and-multisigs/1878)
   
  - [API3 Year 0 Wrapped: DAO and Legal Structure](https://medium.com/@erich.dylus/api3-year-0-wrapped-dao-and-legal-structure-37132af2776b)
@@ -29,7 +31,7 @@ Unless otherwise specified, my [autonomous attorney disclosure](https://github.c
 <br>
 <p align="center">
     Build, Learn, Discuss:    
-    <a href="https://api3.eth.link/#/">DAO</a>
+    <a href="https://api3.eth/">DAO Interface</a>
     · ⟁ ·
     <a href="https://api3.org/">Website</a>
     · ⟁ ·
